@@ -1,0 +1,19 @@
+spring:
+  config:
+    import: optional:configserver:http://finlearn-config-server:8888
+  datasource:
+    url: jdbc:postgresql://finlearn-postgres:5432/simulationdb
+    driver-class-name: org.postgresql.Driver
+    username: postgres
+    password: postgres
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    service-url:
+      defaultZone: http://finlearn-eureka:8761/eureka/

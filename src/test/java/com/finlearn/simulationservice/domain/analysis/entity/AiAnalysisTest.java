@@ -148,4 +148,20 @@ class AiAnalysisTest {
 
         assertThat(aiAnalysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
     }
+
+    @Test
+    @DisplayName("동일 계좌에 여러 AI 분석 이력을 생성할 수 있다.")
+    void create_multipleAnalysisForSameAccount_success() {
+        AiAnalysis first = createDefault();
+        AiAnalysis second = AiAnalysis.create(
+                ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
+                SEASON_ID, SEASON_NUMBER,
+                new BigDecimal("30.00"), new BigDecimal("45.00"),
+                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT
+        );
+
+        assertThat(first.getAccountId()).isEqualTo(second.getAccountId());
+        assertThat(first.getRiskScore()).isNotEqualByComparingTo(second.getRiskScore());
+    }
 }

@@ -16,6 +16,8 @@ public class StockPriceRepositoryImpl implements StockPriceRepository {
 
     @Override
     public Optional<BigDecimal> findCurrentPrice(StockAssetType assetType, String symbol) {
+        // MVP 단계에서는 stock_items.current_price(DB 적재값)를 현재 시세 소스로 사용한다.
+        // 향후 Redis 캐시/외부 실시간 시세 API로 전환 시 이 구현체만 교체하면 된다.
         if (symbol == null || symbol.isBlank()) {
             return Optional.empty();
         }

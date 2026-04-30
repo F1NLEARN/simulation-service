@@ -40,6 +40,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -159,6 +160,61 @@ class InvestmentServiceTest {
         verify(eventPublisher, times(1)).publishEvent(any(SeasonInvestmentAccountOpenedEvent.class));
         verify(eventPublisher, times(1)).publishEvent(any(SeedMoneyGrantedEvent.class));
         assertEquals(seasonParticipantId, accountCaptor.getValue().getSeasonParticipantId());
+    }
+
+    @Test
+    @DisplayName("시즌 참여자 생성 중 유니크 충돌이 발생하면 재조회로 복구하고 중복 처리를 멈춘다.")
+    void handlePointQuizPassedRecoverWhenParticipantUniqueConflict() {
+        UUID seasonId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        BigDecimal seedMoney = new BigDecimal("1000000.00");
+        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, userId, seedMoney);
+
+        SeasonParticipant existingParticipant = SeasonParticipant.create(seasonId, userId);
+        UUID seasonParticipantId = UUID.randomUUID();
+        ReflectionTestUtils.setField(existingParticipant, "seasonParticipantId", seasonParticipantId);
+        InvestmentAccount existingAccount = InvestmentAccount.open(seasonParticipantId, seedMoney);
+
+        when(seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId))
+                .thenReturn(Optional.empty(), Optional.of(existingParticipant));
+        when(seasonParticipantRepository.save(any(SeasonParticipant.class)))
+                .thenThrow(new DataIntegrityViolationException("unique constraint"));
+        when(investmentAccountRepository.findBySeasonParticipantId(seasonParticipantId))
+                .thenReturn(Optional.of(existingAccount));
+
+        assertDoesNotThrow(() -> investmentService.handlePointQuizPassed(event));
+
+        verify(seasonParticipantRepository, times(1)).save(any(SeasonParticipant.class));
+        verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
+        verify(seedMoneyGrantHistoryRepository, never()).save(any(SeedMoneyGrantHistory.class));
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    @DisplayName("계좌 생성 중 유니크 충돌이 발생하면 재조회로 복구하고 이벤트를 중복 발행하지 않는다.")
+    void handlePointQuizPassedRecoverWhenAccountUniqueConflict() {
+        UUID seasonId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        BigDecimal seedMoney = new BigDecimal("1000000.00");
+        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, userId, seedMoney);
+
+        SeasonParticipant participant = SeasonParticipant.create(seasonId, userId);
+        UUID seasonParticipantId = UUID.randomUUID();
+        ReflectionTestUtils.setField(participant, "seasonParticipantId", seasonParticipantId);
+        InvestmentAccount existingAccount = InvestmentAccount.open(seasonParticipantId, seedMoney);
+
+        when(seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId))
+                .thenReturn(Optional.of(participant));
+        when(investmentAccountRepository.findBySeasonParticipantId(seasonParticipantId))
+                .thenReturn(Optional.empty(), Optional.of(existingAccount));
+        when(investmentAccountRepository.save(any(InvestmentAccount.class)))
+                .thenThrow(new DataIntegrityViolationException("unique constraint"));
+
+        assertDoesNotThrow(() -> investmentService.handlePointQuizPassed(event));
+
+        verify(investmentAccountRepository, times(1)).save(any(InvestmentAccount.class));
+        verify(seedMoneyGrantHistoryRepository, never()).save(any(SeedMoneyGrantHistory.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
@@ -402,16 +458,39 @@ class InvestmentServiceTest {
         UUID userId = UUID.randomUUID();
         FavoriteStock first = FavoriteStock.register(userId, StockAssetType.STOCK, "005930");
         FavoriteStock second = FavoriteStock.register(userId, StockAssetType.ETF, "069500");
+        StockItem firstItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
+        StockItem secondItem = StockItem.create("KODEX 200", "069500", StockAssetType.ETF);
         ReflectionTestUtils.setField(first, "favoriteStockId", UUID.randomUUID());
         ReflectionTestUtils.setField(second, "favoriteStockId", UUID.randomUUID());
 
         when(favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(first, second));
+        when(stockItemRepository.findAllByStockCodeIn(List.of("005930", "069500")))
+                .thenReturn(List.of(firstItem, secondItem));
 
         List<FavoriteStockResponse> result = investmentService.getFavoriteStocks(userId);
 
         assertEquals(2, result.size());
         assertEquals("005930", result.get(0).symbol());
+        assertEquals("삼성전자", result.get(0).stockName());
         assertEquals("069500", result.get(1).symbol());
+        assertEquals("KODEX 200", result.get(1).stockName());
+    }
+
+    @Test
+    @DisplayName("종목 정보가 없으면 관심 종목명은 symbol 값으로 fallback 된다.")
+    void getFavoriteStocksFallbackToSymbolWhenStockNameMissing() {
+        UUID userId = UUID.randomUUID();
+        FavoriteStock favoriteStock = FavoriteStock.register(userId, StockAssetType.STOCK, "MISSING01");
+        ReflectionTestUtils.setField(favoriteStock, "favoriteStockId", UUID.randomUUID());
+
+        when(favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(favoriteStock));
+        when(stockItemRepository.findAllByStockCodeIn(List.of("MISSING01"))).thenReturn(List.of());
+
+        List<FavoriteStockResponse> result = investmentService.getFavoriteStocks(userId);
+
+        assertEquals(1, result.size());
+        assertEquals("MISSING01", result.get(0).symbol());
+        assertEquals("MISSING01", result.get(0).stockName());
     }
 
     @Test

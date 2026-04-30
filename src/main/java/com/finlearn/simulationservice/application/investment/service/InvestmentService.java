@@ -30,7 +30,9 @@ import com.finlearn.simulationservice.domain.investment.repository.StockPriceRep
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.context.ApplicationEventPublisher;
@@ -52,8 +54,7 @@ public class InvestmentService {
 
     @Transactional
     public void handlePointQuizPassed(PointQuizPassedEvent event) {
-        SeasonParticipant participant = seasonParticipantRepository.findBySeasonIdAndUserId(event.seasonId(), event.userId())
-                .orElseGet(() -> seasonParticipantRepository.save(SeasonParticipant.create(event.seasonId(), event.userId())));
+        SeasonParticipant participant = getOrCreateSeasonParticipant(event.seasonId(), event.userId());
 
         boolean accountAlreadyExists = investmentAccountRepository.findBySeasonParticipantId(participant.getSeasonParticipantId())
                 .isPresent();
@@ -63,7 +64,19 @@ public class InvestmentService {
         }
 
         InvestmentAccount account = InvestmentAccount.open(participant.getSeasonParticipantId(), event.seedMoney());
-        InvestmentAccount savedAccount = investmentAccountRepository.save(account);
+        InvestmentAccount savedAccount;
+        try {
+            savedAccount = investmentAccountRepository.save(account);
+        } catch (DataIntegrityViolationException e) {
+            boolean createdByConcurrentRequest = investmentAccountRepository
+                    .findBySeasonParticipantId(participant.getSeasonParticipantId())
+                    .isPresent();
+            if (createdByConcurrentRequest) {
+                return;
+            }
+            throw e;
+        }
+
         seedMoneyGrantHistoryRepository.save(
                 SeedMoneyGrantHistory.grant(
                         event.userId(),
@@ -162,8 +175,24 @@ public class InvestmentService {
     }
 
     public List<FavoriteStockResponse> getFavoriteStocks(UUID userId) {
-        return favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId).stream()
-                .map(FavoriteStockResponse::from)
+        List<FavoriteStock> favoriteStocks = favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId);
+        if (favoriteStocks.isEmpty()) {
+            return List.of();
+        }
+
+        List<String> stockCodes = favoriteStocks.stream()
+                .map(FavoriteStock::getSymbol)
+                .distinct()
+                .toList();
+
+        Map<String, String> stockNameByCode = stockItemRepository.findAllByStockCodeIn(stockCodes).stream()
+                .collect(Collectors.toMap(StockItem::getStockCode, StockItem::getStockName, (first, ignored) -> first));
+
+        return favoriteStocks.stream()
+                .map(favoriteStock -> FavoriteStockResponse.from(
+                        favoriteStock,
+                        stockNameByCode.getOrDefault(favoriteStock.getSymbol(), favoriteStock.getSymbol())
+                ))
                 .toList();
     }
 
@@ -206,6 +235,20 @@ public class InvestmentService {
             return StockAssetType.valueOf(assetType.trim().toUpperCase());
         } catch (IllegalArgumentException e) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ASSET_TYPE);
+        }
+    }
+
+    private SeasonParticipant getOrCreateSeasonParticipant(UUID seasonId, UUID userId) {
+        return seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId)
+                .orElseGet(() -> createSeasonParticipantWithRaceConditionHandling(seasonId, userId));
+    }
+
+    private SeasonParticipant createSeasonParticipantWithRaceConditionHandling(UUID seasonId, UUID userId) {
+        try {
+            return seasonParticipantRepository.save(SeasonParticipant.create(seasonId, userId));
+        } catch (DataIntegrityViolationException e) {
+            return seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId)
+                    .orElseThrow(() -> e);
         }
     }
 }

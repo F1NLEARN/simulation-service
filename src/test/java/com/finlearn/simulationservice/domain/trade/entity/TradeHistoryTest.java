@@ -1,7 +1,9 @@
 package com.finlearn.simulationservice.domain.trade.entity;
 
-import com.finlearn.common.exception.BadRequestException;
+import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
 import com.finlearn.simulationservice.domain.trade.enums.TradeType;
+import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
+import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -53,6 +55,22 @@ class TradeHistoryTest {
     }
 
     @Test
+    @DisplayName("Command 객체로 거래 이력을 생성할 수 있다.")
+    void create_withCommand_success() {
+        CreateTradeHistoryCommand command = new CreateTradeHistoryCommand(
+                ACCOUNT_ID, SEASON_ID, SEASON_NUMBER, INSTRUMENT_CODE, TradeType.BUY,
+                QUANTITY, TRADE_PRICE, TRADE_AT, CASH_BALANCE_AFTER_TRADE
+        );
+
+        TradeHistory tradeHistory = TradeHistory.create(command);
+
+        assertThat(tradeHistory.getAccountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(tradeHistory.getTradeType()).isEqualTo(TradeType.BUY);
+        assertThat(tradeHistory.getQuantity()).isEqualTo(QUANTITY);
+        assertThat(tradeHistory.getTradePrice()).isEqualTo(TRADE_PRICE);
+    }
+
+    @Test
     @DisplayName("총 거래 금액은 수량 × 단가로 자동 계산된다.")
     void buy_totalTradeAmount_isCalculatedAutomatically() {
         TradeHistory tradeHistory = TradeHistory.buy(
@@ -64,38 +82,38 @@ class TradeHistoryTest {
     }
 
     @Test
-    @DisplayName("거래 수량이 0 이하이면 생성에 실패한다.")
+    @DisplayName("거래 수량이 0 이하이면 INVALID_QUANTITY 코드로 예외가 발생한다.")
     void create_withNonPositiveQuantity_throwsException() {
         assertThatThrownBy(() -> TradeHistory.buy(
                 ACCOUNT_ID, SEASON_ID, SEASON_NUMBER, INSTRUMENT_CODE,
                 0L, TRADE_PRICE, TRADE_AT, CASH_BALANCE_AFTER_TRADE
-        )).isInstanceOf(BadRequestException.class);
+        ))
+                .isInstanceOf(TradeHistoryDomainException.class)
+                .hasMessage(TradeHistoryErrorCode.INVALID_QUANTITY.getMessage());
     }
 
     @Test
-    @DisplayName("거래 가격이 0 이하이면 생성에 실패한다.")
+    @DisplayName("거래 가격이 0 이하이면 INVALID_TRADE_PRICE 코드로 예외가 발생한다.")
     void create_withNonPositivePrice_throwsException() {
         assertThatThrownBy(() -> TradeHistory.buy(
                 ACCOUNT_ID, SEASON_ID, SEASON_NUMBER, INSTRUMENT_CODE,
                 QUANTITY, 0L, TRADE_AT, CASH_BALANCE_AFTER_TRADE
-        )).isInstanceOf(BadRequestException.class);
+        ))
+                .isInstanceOf(TradeHistoryDomainException.class)
+                .hasMessage(TradeHistoryErrorCode.INVALID_TRADE_PRICE.getMessage());
     }
 
     @Test
-    @DisplayName("tradeType이 null이면 생성에 실패한다.")
+    @DisplayName("tradeType이 null이면 INVALID_TRADE_TYPE 코드로 예외가 발생한다.")
     void create_withNullTradeType_throwsException() {
-        assertThatThrownBy(() -> TradeHistory.builder()
-                .accountId(ACCOUNT_ID)
-                .seasonId(SEASON_ID)
-                .seasonNumber(SEASON_NUMBER)
-                .instrumentCode(INSTRUMENT_CODE)
-                .tradeType(null)
-                .quantity(QUANTITY)
-                .tradePrice(TRADE_PRICE)
-                .tradeAt(TRADE_AT)
-                .cashBalanceAfterTrade(CASH_BALANCE_AFTER_TRADE)
-                .build()
-        ).isInstanceOf(BadRequestException.class);
+        CreateTradeHistoryCommand command = new CreateTradeHistoryCommand(
+                ACCOUNT_ID, SEASON_ID, SEASON_NUMBER, INSTRUMENT_CODE, null,
+                QUANTITY, TRADE_PRICE, TRADE_AT, CASH_BALANCE_AFTER_TRADE
+        );
+
+        assertThatThrownBy(() -> TradeHistory.create(command))
+                .isInstanceOf(TradeHistoryDomainException.class)
+                .hasMessage(TradeHistoryErrorCode.INVALID_TRADE_TYPE.getMessage());
     }
 
     @Test

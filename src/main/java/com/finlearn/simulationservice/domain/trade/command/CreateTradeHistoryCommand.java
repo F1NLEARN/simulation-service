@@ -1,6 +1,6 @@
 package com.finlearn.simulationservice.domain.trade.command;
 
-import com.finlearn.simulationservice.domain.trade.enums.TradeType;
+import com.finlearn.simulationservice.domain.trade.entity.TradeType;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

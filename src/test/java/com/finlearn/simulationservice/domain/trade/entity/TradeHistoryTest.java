@@ -1,7 +1,7 @@
 package com.finlearn.simulationservice.domain.trade.entity;
 
 import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
-import com.finlearn.simulationservice.domain.trade.enums.TradeType;
+import com.finlearn.simulationservice.domain.trade.entity.TradeType;
 import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
 import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -35,7 +35,7 @@ class TradeHistoryTest {
         assertThat(tradeHistory.getAccountId()).isEqualTo(ACCOUNT_ID);
         assertThat(tradeHistory.getSeasonId()).isEqualTo(SEASON_ID);
         assertThat(tradeHistory.getSeasonNumber()).isEqualTo(SEASON_NUMBER);
-        assertThat(tradeHistory.getInstrumentCode()).isEqualTo(INSTRUMENT_CODE);
+        assertThat(tradeHistory.getInstrumentCode().getValue()).isEqualTo(INSTRUMENT_CODE);
         assertThat(tradeHistory.getTradeType()).isEqualTo(TradeType.BUY);
         assertThat(tradeHistory.getQuantity()).isEqualTo(QUANTITY);
         assertThat(tradeHistory.getTradePrice()).isEqualTo(TRADE_PRICE);

@@ -10,8 +10,6 @@ public interface HoldingRepository {
 
     Holding save(Holding holding);
 
-    Optional<Holding> findById(UUID holdingId);
-
     Optional<Holding> findByAccountIdAndInstrumentCode(UUID accountId, String instrumentCode);
 
     List<Holding> findAllByAccountId(UUID accountId);

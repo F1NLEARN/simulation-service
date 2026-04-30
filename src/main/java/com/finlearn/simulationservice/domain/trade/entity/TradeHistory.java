@@ -1,8 +1,10 @@
 package com.finlearn.simulationservice.domain.trade.entity;
 
 import com.finlearn.common.domain.BaseEntity;
-import com.finlearn.common.exception.BadRequestException;
+import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
 import com.finlearn.simulationservice.domain.trade.enums.TradeType;
+import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
+import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -12,7 +14,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -60,84 +61,69 @@ public class TradeHistory extends BaseEntity {
     @Column(nullable = false)
     private long cashBalanceAfterTrade;
 
-    @Builder
-    private TradeHistory(UUID accountId, UUID seasonId, int seasonNumber, String instrumentCode,
-                         TradeType tradeType, long quantity, long tradePrice,
-                         LocalDateTime tradeAt, long cashBalanceAfterTrade) {
-        validate(accountId, seasonId, seasonNumber, instrumentCode, tradeType, quantity, tradePrice, tradeAt, cashBalanceAfterTrade);
-        this.accountId = accountId;
-        this.seasonId = seasonId;
-        this.seasonNumber = seasonNumber;
-        this.instrumentCode = instrumentCode;
-        this.tradeType = tradeType;
-        this.quantity = quantity;
-        this.tradePrice = tradePrice;
-        this.totalTradeAmount = quantity * tradePrice;
-        this.tradeAt = tradeAt;
-        this.cashBalanceAfterTrade = cashBalanceAfterTrade;
+    private TradeHistory(CreateTradeHistoryCommand command) {
+        validate(command);
+        this.accountId = command.accountId();
+        this.seasonId = command.seasonId();
+        this.seasonNumber = command.seasonNumber();
+        this.instrumentCode = command.instrumentCode();
+        this.tradeType = command.tradeType();
+        this.quantity = command.quantity();
+        this.tradePrice = command.tradePrice();
+        this.totalTradeAmount = command.quantity() * command.tradePrice();
+        this.tradeAt = command.tradeAt();
+        this.cashBalanceAfterTrade = command.cashBalanceAfterTrade();
+    }
+
+    public static TradeHistory create(CreateTradeHistoryCommand command) {
+        return new TradeHistory(command);
     }
 
     public static TradeHistory buy(UUID accountId, UUID seasonId, int seasonNumber, String instrumentCode,
                                    long quantity, long tradePrice,
                                    LocalDateTime tradeAt, long cashBalanceAfterTrade) {
-        return TradeHistory.builder()
-                .accountId(accountId)
-                .seasonId(seasonId)
-                .seasonNumber(seasonNumber)
-                .instrumentCode(instrumentCode)
-                .tradeType(TradeType.BUY)
-                .quantity(quantity)
-                .tradePrice(tradePrice)
-                .tradeAt(tradeAt)
-                .cashBalanceAfterTrade(cashBalanceAfterTrade)
-                .build();
+        return create(new CreateTradeHistoryCommand(
+                accountId, seasonId, seasonNumber, instrumentCode, TradeType.BUY,
+                quantity, tradePrice, tradeAt, cashBalanceAfterTrade
+        ));
     }
 
     public static TradeHistory sell(UUID accountId, UUID seasonId, int seasonNumber, String instrumentCode,
                                     long quantity, long tradePrice,
                                     LocalDateTime tradeAt, long cashBalanceAfterTrade) {
-        return TradeHistory.builder()
-                .accountId(accountId)
-                .seasonId(seasonId)
-                .seasonNumber(seasonNumber)
-                .instrumentCode(instrumentCode)
-                .tradeType(TradeType.SELL)
-                .quantity(quantity)
-                .tradePrice(tradePrice)
-                .tradeAt(tradeAt)
-                .cashBalanceAfterTrade(cashBalanceAfterTrade)
-                .build();
+        return create(new CreateTradeHistoryCommand(
+                accountId, seasonId, seasonNumber, instrumentCode, TradeType.SELL,
+                quantity, tradePrice, tradeAt, cashBalanceAfterTrade
+        ));
     }
 
-    private static void validate(UUID accountId, UUID seasonId, int seasonNumber, String instrumentCode,
-                                  TradeType tradeType, long quantity, long tradePrice,
-                                  LocalDateTime tradeAt, long cashBalanceAfterTrade) {
-        if (accountId == null) {
-            throw new BadRequestException("accountId", "accountId는 null일 수 없습니다.");
+    private static void validate(CreateTradeHistoryCommand command) {
+        if (command.accountId() == null) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_ACCOUNT_ID);
         }
-        if (seasonId == null) {
-            throw new BadRequestException("seasonId", "seasonId는 null일 수 없습니다.");
+        if (command.seasonId() == null) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_SEASON_ID);
         }
-        if (seasonNumber <= 0) {
-            throw new BadRequestException("seasonNumber", "seasonNumber는 0보다 커야 합니다.");
+        if (command.seasonNumber() <= 0) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_SEASON_NUMBER);
         }
-        if (instrumentCode == null || instrumentCode.isBlank()) {
-            throw new BadRequestException("instrumentCode", "instrumentCode는 blank일 수 없습니다.");
+        if (command.instrumentCode() == null || command.instrumentCode().isBlank()) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_INSTRUMENT_CODE);
         }
-        if (tradeType == null) {
-            throw new BadRequestException("tradeType", "tradeType은 null일 수 없습니다.");
+        if (command.tradeType() == null) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_TRADE_TYPE);
         }
-        if (quantity <= 0) {
-            throw new BadRequestException("quantity", "거래 수량은 0보다 커야 합니다.");
+        if (command.quantity() <= 0) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_QUANTITY);
         }
-        if (tradePrice <= 0) {
-            throw new BadRequestException("tradePrice", "거래 가격은 0보다 커야 합니다.");
+        if (command.tradePrice() <= 0) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_TRADE_PRICE);
         }
-        if (tradeAt == null) {
-            throw new BadRequestException("tradeAt", "거래 일시는 null일 수 없습니다.");
+        if (command.tradeAt() == null) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_TRADE_AT);
         }
-        if (cashBalanceAfterTrade < 0) {
-            throw new BadRequestException("cashBalanceAfterTrade", "거래 후 현금 잔액은 0 이상이어야 합니다.");
+        if (command.cashBalanceAfterTrade() < 0) {
+            throw new TradeHistoryDomainException(TradeHistoryErrorCode.INVALID_CASH_BALANCE);
         }
     }
 }

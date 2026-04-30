@@ -225,6 +225,6 @@ class AiAnalysisTest {
         ));
 
         assertThat(first.getAccountId()).isEqualTo(second.getAccountId());
-        assertThat(first.getRiskScore()).isNotEqualByComparingTo(second.getRiskScore());
+        assertThat(first.getRiskScore().getValue()).isNotEqualByComparingTo(second.getRiskScore().getValue());
     }
 }

@@ -1,12 +1,16 @@
 package com.finlearn.simulationservice.domain.analysis.repository;
 
 import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
-import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
-public interface AiAnalysisRepository extends JpaRepository<AiAnalysis, UUID> {
+public interface AiAnalysisRepository {
+
+    AiAnalysis save(AiAnalysis aiAnalysis);
+
+    Optional<AiAnalysis> findById(UUID aiAnalysisId);
 
     List<AiAnalysis> findAllByAccountId(UUID accountId);
 

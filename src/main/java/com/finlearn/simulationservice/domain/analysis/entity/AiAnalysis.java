@@ -95,10 +95,16 @@ public class AiAnalysis extends BaseEntity {
     }
 
     public void complete() {
+        if (!this.analysisStatus.canComplete()) {
+            throw new AiAnalysisDomainException(AiAnalysisErrorCode.CANNOT_COMPLETE);
+        }
         this.analysisStatus = AnalysisStatus.COMPLETED;
     }
 
     public void fail() {
+        if (!this.analysisStatus.canFail()) {
+            throw new AiAnalysisDomainException(AiAnalysisErrorCode.CANNOT_FAIL);
+        }
         this.analysisStatus = AnalysisStatus.FAILED;
     }
 

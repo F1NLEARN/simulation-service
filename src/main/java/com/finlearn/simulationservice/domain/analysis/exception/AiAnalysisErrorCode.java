@@ -19,7 +19,9 @@ public enum AiAnalysisErrorCode {
     INVALID_ANALYSIS_PERIOD_START_AT("AI_INVALID_PERIOD_START", "analysisPeriodStartAt", "analysisPeriodStartAt은 null일 수 없습니다."),
     INVALID_ANALYSIS_PERIOD_END_AT("AI_INVALID_PERIOD_END", "analysisPeriodEndAt", "analysisPeriodEndAt은 null일 수 없습니다."),
     INVALID_ANALYSIS_PERIOD("AI_INVALID_PERIOD", "analysisPeriodStartAt", "분석 시작 기간은 종료 기간보다 이전이어야 합니다."),
-    INVALID_ANALYZED_AT("AI_INVALID_ANALYZED_AT", "analyzedAt", "analyzedAt은 null일 수 없습니다.");
+    INVALID_ANALYZED_AT("AI_INVALID_ANALYZED_AT", "analyzedAt", "analyzedAt은 null일 수 없습니다."),
+    CANNOT_COMPLETE("AI_CANNOT_COMPLETE", "analysisStatus", "READY 상태에서만 완료 처리할 수 있습니다."),
+    CANNOT_FAIL("AI_CANNOT_FAIL", "analysisStatus", "READY 상태에서만 실패 처리할 수 있습니다.");
 
     private final String code;
     private final String field;

@@ -1,4 +1,4 @@
-package com.finlearn.simulationservice.domain.analysis.enums;
+package com.finlearn.simulationservice.domain.analysis.entity;
 
 public enum AnalysisStatus {
 

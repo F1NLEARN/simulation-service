@@ -2,6 +2,7 @@ package com.finlearn.simulationservice.domain.holding.entity;
 
 import com.finlearn.common.domain.BaseEntity;
 import com.finlearn.common.exception.BadRequestException;
+import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -79,17 +80,16 @@ public class Holding extends BaseEntity {
         recalculateDerived();
     }
 
-    public static Holding create(UUID accountId, String holdingName, UUID seasonId, int seasonNumber,
-                                 String instrumentCode, long quantity, long averageBuyPrice, long currentPrice) {
+    public static Holding create(CreateHoldingCommand command) {
         return Holding.builder()
-                .accountId(accountId)
-                .holdingName(holdingName)
-                .seasonId(seasonId)
-                .seasonNumber(seasonNumber)
-                .instrumentCode(instrumentCode)
-                .quantity(quantity)
-                .averageBuyPrice(averageBuyPrice)
-                .currentPrice(currentPrice)
+                .accountId(command.accountId())
+                .holdingName(command.holdingName())
+                .seasonId(command.seasonId())
+                .seasonNumber(command.seasonNumber())
+                .instrumentCode(command.instrumentCode())
+                .quantity(command.quantity())
+                .averageBuyPrice(command.averageBuyPrice())
+                .currentPrice(command.currentPrice())
                 .build();
     }
 

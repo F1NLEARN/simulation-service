@@ -1,6 +1,7 @@
 package com.finlearn.simulationservice.domain.holding.entity;
 
 import com.finlearn.common.exception.BadRequestException;
+import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -25,16 +26,20 @@ class HoldingTest {
     // unrealizedProfitLoss = 800000 - 750000 = 50000
     // returnRate = 50000 / 750000 * 100 = 6.67%
 
-    private Holding createDefault() {
-        return Holding.create(
+    private CreateHoldingCommand defaultCommand() {
+        return new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
                 INSTRUMENT_CODE, QUANTITY, AVERAGE_BUY_PRICE, CURRENT_PRICE
         );
     }
 
+    private Holding createDefault() {
+        return Holding.create(defaultCommand());
+    }
+
     @Test
-    @DisplayName("정상적인 값으로 Holding을 생성하면 파생 값이 자동 계산된다.")
-    void create_withValidValues_derivedValuesCalculated() {
+    @DisplayName("CreateHoldingCommand로 Holding을 생성하면 파생 값이 자동 계산된다.")
+    void create_withCommand_derivedValuesCalculated() {
         Holding holding = createDefault();
 
         assertThat(holding.getAccountId()).isEqualTo(ACCOUNT_ID);
@@ -54,39 +59,48 @@ class HoldingTest {
     @Test
     @DisplayName("quantity가 음수이면 생성에 실패한다.")
     void create_withNegativeQuantity_throwsException() {
-        assertThatThrownBy(() -> Holding.create(
+        CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
                 INSTRUMENT_CODE, -1L, AVERAGE_BUY_PRICE, CURRENT_PRICE
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> Holding.create(command))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
     @DisplayName("averageBuyPrice가 음수이면 생성에 실패한다.")
     void create_withNegativeAverageBuyPrice_throwsException() {
-        assertThatThrownBy(() -> Holding.create(
+        CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
                 INSTRUMENT_CODE, QUANTITY, -1L, CURRENT_PRICE
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> Holding.create(command))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
     @DisplayName("currentPrice가 0 이하이면 생성에 실패한다.")
     void create_withNonPositiveCurrentPrice_throwsException() {
-        assertThatThrownBy(() -> Holding.create(
+        CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
                 INSTRUMENT_CODE, QUANTITY, AVERAGE_BUY_PRICE, 0L
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> Holding.create(command))
+                .isInstanceOf(BadRequestException.class);
     }
 
     @Test
     @DisplayName("quantity가 0이면 isEmpty()가 true를 반환한다.")
     void isEmpty_whenQuantityIsZero_returnsTrue() {
-        Holding holding = Holding.create(
+        CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
                 INSTRUMENT_CODE, 0L, 0L, CURRENT_PRICE
         );
 
-        assertThat(holding.isEmpty()).isTrue();
+        assertThat(Holding.create(command).isEmpty()).isTrue();
     }
 
     @Test

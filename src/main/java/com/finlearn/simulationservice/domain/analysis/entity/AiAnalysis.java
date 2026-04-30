@@ -2,10 +2,13 @@ package com.finlearn.simulationservice.domain.analysis.entity;
 
 import com.finlearn.common.domain.BaseEntity;
 import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
-import com.finlearn.simulationservice.domain.analysis.enums.AnalysisStatus;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisDomainException;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisErrorCode;
+import com.finlearn.simulationservice.domain.analysis.vo.AnalysisScore;
+import jakarta.persistence.AttributeOverride;
+import jakarta.persistence.AttributeOverrides;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -47,11 +50,17 @@ public class AiAnalysis extends BaseEntity {
     @Column(nullable = false)
     private int seasonNumber;
 
-    @Column(nullable = false, precision = 5, scale = 2)
-    private BigDecimal riskScore;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "risk_score", nullable = false, precision = 5, scale = 2))
+    })
+    private AnalysisScore riskScore;
 
-    @Column(nullable = false, precision = 5, scale = 2)
-    private BigDecimal portfolioConcentrationScore;
+    @Embedded
+    @AttributeOverrides({
+            @AttributeOverride(name = "value", column = @Column(name = "portfolio_concentration_score", nullable = false, precision = 5, scale = 2))
+    })
+    private AnalysisScore portfolioConcentrationScore;
 
     @Column(nullable = false)
     private String recommendedLearningTopic;
@@ -80,8 +89,8 @@ public class AiAnalysis extends BaseEntity {
         this.targetUserName = command.targetUserName();
         this.seasonId = command.seasonId();
         this.seasonNumber = command.seasonNumber();
-        this.riskScore = command.riskScore();
-        this.portfolioConcentrationScore = command.portfolioConcentrationScore();
+        this.riskScore = AnalysisScore.of(command.riskScore());
+        this.portfolioConcentrationScore = AnalysisScore.of(command.portfolioConcentrationScore());
         this.recommendedLearningTopic = command.recommendedLearningTopic();
         this.aiFeedbackMessage = command.aiFeedbackMessage();
         this.analysisPeriodStartAt = command.analysisPeriodStartAt();

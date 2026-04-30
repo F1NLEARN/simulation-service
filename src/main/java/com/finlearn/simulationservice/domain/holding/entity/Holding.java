@@ -4,7 +4,10 @@ import com.finlearn.common.domain.BaseEntity;
 import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
 import com.finlearn.simulationservice.domain.holding.exception.HoldingDomainException;
 import com.finlearn.simulationservice.domain.holding.exception.HoldingErrorCode;
+import com.finlearn.simulationservice.domain.vo.InstrumentCode;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -40,8 +43,9 @@ public class Holding extends BaseEntity {
     @Column(nullable = false)
     private int seasonNumber;
 
-    @Column(nullable = false, length = 20)
-    private String instrumentCode;
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "instrument_code", nullable = false, length = 20))
+    private InstrumentCode instrumentCode;
 
     @Column(nullable = false)
     private long quantity;
@@ -70,7 +74,7 @@ public class Holding extends BaseEntity {
         this.holdingName = command.holdingName();
         this.seasonId = command.seasonId();
         this.seasonNumber = command.seasonNumber();
-        this.instrumentCode = command.instrumentCode();
+        this.instrumentCode = InstrumentCode.of(command.instrumentCode());
         this.quantity = command.quantity();
         this.averageBuyPrice = command.averageBuyPrice();
         this.currentPrice = command.currentPrice();

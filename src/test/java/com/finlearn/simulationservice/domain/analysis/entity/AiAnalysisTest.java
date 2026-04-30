@@ -1,7 +1,7 @@
 package com.finlearn.simulationservice.domain.analysis.entity;
 
 import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
-import com.finlearn.simulationservice.domain.analysis.enums.AnalysisStatus;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisDomainException;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -53,8 +53,8 @@ class AiAnalysisTest {
         assertThat(aiAnalysis.getTargetUserName()).isEqualTo(TARGET_USER_NAME);
         assertThat(aiAnalysis.getSeasonId()).isEqualTo(SEASON_ID);
         assertThat(aiAnalysis.getSeasonNumber()).isEqualTo(SEASON_NUMBER);
-        assertThat(aiAnalysis.getRiskScore()).isEqualByComparingTo(RISK_SCORE);
-        assertThat(aiAnalysis.getPortfolioConcentrationScore()).isEqualByComparingTo(PORTFOLIO_CONCENTRATION_SCORE);
+        assertThat(aiAnalysis.getRiskScore().getValue()).isEqualByComparingTo(RISK_SCORE);
+        assertThat(aiAnalysis.getPortfolioConcentrationScore().getValue()).isEqualByComparingTo(PORTFOLIO_CONCENTRATION_SCORE);
         assertThat(aiAnalysis.getRecommendedLearningTopic()).isEqualTo(RECOMMENDED_LEARNING_TOPIC);
         assertThat(aiAnalysis.getAiFeedbackMessage()).isEqualTo(AI_FEEDBACK_MESSAGE);
         assertThat(aiAnalysis.getAnalysisPeriodStartAt()).isEqualTo(PERIOD_START);

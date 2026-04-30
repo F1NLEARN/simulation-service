@@ -47,7 +47,7 @@ class HoldingTest {
         assertThat(holding.getHoldingName()).isEqualTo(HOLDING_NAME);
         assertThat(holding.getSeasonId()).isEqualTo(SEASON_ID);
         assertThat(holding.getSeasonNumber()).isEqualTo(SEASON_NUMBER);
-        assertThat(holding.getInstrumentCode()).isEqualTo(INSTRUMENT_CODE);
+        assertThat(holding.getInstrumentCode().getValue()).isEqualTo(INSTRUMENT_CODE);
         assertThat(holding.getQuantity()).isEqualTo(QUANTITY);
         assertThat(holding.getAverageBuyPrice()).isEqualTo(AVERAGE_BUY_PRICE);
         assertThat(holding.getCurrentPrice()).isEqualTo(CURRENT_PRICE);

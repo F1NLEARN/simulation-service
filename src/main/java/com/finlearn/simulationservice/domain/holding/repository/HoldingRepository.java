@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.UUID;
 
 public interface HoldingRepository extends JpaRepository<Holding, UUID> {
+    Holding save(Holding holding);
 
     Optional<Holding> findByAccountIdAndInstrumentCode(UUID accountId, String instrumentCode);
 

@@ -1,16 +1,19 @@
 package com.finlearn.simulationservice.domain.holding.entity;
 
 import com.finlearn.common.domain.BaseEntity;
-import com.finlearn.common.exception.BadRequestException;
 import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
+import com.finlearn.simulationservice.domain.holding.exception.HoldingDomainException;
+import com.finlearn.simulationservice.domain.holding.exception.HoldingErrorCode;
+import com.finlearn.simulationservice.domain.vo.InstrumentCode;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import lombok.AccessLevel;
-import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -40,8 +43,9 @@ public class Holding extends BaseEntity {
     @Column(nullable = false)
     private int seasonNumber;
 
-    @Column(nullable = false, length = 20)
-    private String instrumentCode;
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "instrument_code", nullable = false, length = 20))
+    private InstrumentCode instrumentCode;
 
     @Column(nullable = false)
     private long quantity;
@@ -64,41 +68,30 @@ public class Holding extends BaseEntity {
     @Column(nullable = false, precision = 8, scale = 2)
     private BigDecimal returnRate;
 
-    @Builder
-    private Holding(UUID accountId, String holdingName, UUID seasonId, int seasonNumber,
-                    String instrumentCode, long quantity, long averageBuyPrice, long currentPrice) {
-        validate(accountId, holdingName, seasonId, seasonNumber, instrumentCode, quantity, averageBuyPrice, currentPrice);
-        this.accountId = accountId;
-        this.holdingName = holdingName;
-        this.seasonId = seasonId;
-        this.seasonNumber = seasonNumber;
-        this.instrumentCode = instrumentCode;
-        this.quantity = quantity;
-        this.averageBuyPrice = averageBuyPrice;
-        this.currentPrice = currentPrice;
-        this.totalBuyAmount = quantity * averageBuyPrice;
+    private Holding(CreateHoldingCommand command) {
+        validate(command);
+        this.accountId = command.accountId();
+        this.holdingName = command.holdingName();
+        this.seasonId = command.seasonId();
+        this.seasonNumber = command.seasonNumber();
+        this.instrumentCode = InstrumentCode.of(command.instrumentCode());
+        this.quantity = command.quantity();
+        this.averageBuyPrice = command.averageBuyPrice();
+        this.currentPrice = command.currentPrice();
+        this.totalBuyAmount = command.quantity() * command.averageBuyPrice();
         recalculateDerived();
     }
 
     public static Holding create(CreateHoldingCommand command) {
-        return Holding.builder()
-                .accountId(command.accountId())
-                .holdingName(command.holdingName())
-                .seasonId(command.seasonId())
-                .seasonNumber(command.seasonNumber())
-                .instrumentCode(command.instrumentCode())
-                .quantity(command.quantity())
-                .averageBuyPrice(command.averageBuyPrice())
-                .currentPrice(command.currentPrice())
-                .build();
+        return new Holding(command);
     }
 
     public void addBuy(long buyQuantity, long buyPrice) {
         if (buyQuantity <= 0) {
-            throw new BadRequestException("buyQuantity", "추가 매수 수량은 0보다 커야 합니다.");
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_BUY_QUANTITY);
         }
         if (buyPrice <= 0) {
-            throw new BadRequestException("buyPrice", "매수 가격은 0보다 커야 합니다.");
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_BUY_PRICE);
         }
         this.totalBuyAmount += buyQuantity * buyPrice;
         this.quantity += buyQuantity;
@@ -110,10 +103,10 @@ public class Holding extends BaseEntity {
 
     public void sell(long sellQuantity) {
         if (sellQuantity <= 0) {
-            throw new BadRequestException("sellQuantity", "매도 수량은 0보다 커야 합니다.");
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_SELL_QUANTITY);
         }
         if (sellQuantity > this.quantity) {
-            throw new BadRequestException("sellQuantity", "매도 수량이 보유 수량을 초과할 수 없습니다.");
+            throw new HoldingDomainException(HoldingErrorCode.EXCEED_SELL_QUANTITY);
         }
         this.quantity -= sellQuantity;
         this.totalBuyAmount = this.averageBuyPrice * this.quantity;
@@ -122,7 +115,7 @@ public class Holding extends BaseEntity {
 
     public void updateCurrentPrice(long currentPrice) {
         if (currentPrice <= 0) {
-            throw new BadRequestException("currentPrice", "현재가는 0보다 커야 합니다.");
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_UPDATE_PRICE);
         }
         this.currentPrice = currentPrice;
         recalculateDerived();
@@ -142,31 +135,30 @@ public class Holding extends BaseEntity {
                         .divide(BigDecimal.valueOf(this.totalBuyAmount), 2, RoundingMode.HALF_UP);
     }
 
-    private static void validate(UUID accountId, String holdingName, UUID seasonId, int seasonNumber,
-                                  String instrumentCode, long quantity, long averageBuyPrice, long currentPrice) {
-        if (accountId == null) {
-            throw new BadRequestException("accountId", "accountId는 null일 수 없습니다.");
+    private static void validate(CreateHoldingCommand command) {
+        if (command.accountId() == null) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_ACCOUNT_ID);
         }
-        if (holdingName == null || holdingName.isBlank()) {
-            throw new BadRequestException("holdingName", "holdingName은 blank일 수 없습니다.");
+        if (command.holdingName() == null || command.holdingName().isBlank()) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_HOLDING_NAME);
         }
-        if (seasonId == null) {
-            throw new BadRequestException("seasonId", "seasonId는 null일 수 없습니다.");
+        if (command.seasonId() == null) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_SEASON_ID);
         }
-        if (seasonNumber <= 0) {
-            throw new BadRequestException("seasonNumber", "seasonNumber는 0보다 커야 합니다.");
+        if (command.seasonNumber() <= 0) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_SEASON_NUMBER);
         }
-        if (instrumentCode == null || instrumentCode.isBlank()) {
-            throw new BadRequestException("instrumentCode", "instrumentCode는 blank일 수 없습니다.");
+        if (command.instrumentCode() == null || command.instrumentCode().isBlank()) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_INSTRUMENT_CODE);
         }
-        if (quantity < 0) {
-            throw new BadRequestException("quantity", "quantity는 0 이상이어야 합니다.");
+        if (command.quantity() < 0) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_QUANTITY);
         }
-        if (averageBuyPrice < 0) {
-            throw new BadRequestException("averageBuyPrice", "averageBuyPrice는 0 이상이어야 합니다.");
+        if (command.averageBuyPrice() < 0) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_AVERAGE_BUY_PRICE);
         }
-        if (currentPrice <= 0) {
-            throw new BadRequestException("currentPrice", "currentPrice는 0보다 커야 합니다.");
+        if (command.currentPrice() <= 0) {
+            throw new HoldingDomainException(HoldingErrorCode.INVALID_CURRENT_PRICE);
         }
     }
 }

@@ -2,10 +2,12 @@ package com.finlearn.simulationservice.domain.trade.entity;
 
 import com.finlearn.common.domain.BaseEntity;
 import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
-import com.finlearn.simulationservice.domain.trade.enums.TradeType;
 import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
 import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
+import com.finlearn.simulationservice.domain.vo.InstrumentCode;
+import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
@@ -39,8 +41,9 @@ public class TradeHistory extends BaseEntity {
     @Column(nullable = false)
     private int seasonNumber;
 
-    @Column(nullable = false, length = 20)
-    private String instrumentCode;
+    @Embedded
+    @AttributeOverride(name = "value", column = @Column(name = "instrument_code", nullable = false, length = 20))
+    private InstrumentCode instrumentCode;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 10)
@@ -66,7 +69,7 @@ public class TradeHistory extends BaseEntity {
         this.accountId = command.accountId();
         this.seasonId = command.seasonId();
         this.seasonNumber = command.seasonNumber();
-        this.instrumentCode = command.instrumentCode();
+        this.instrumentCode = InstrumentCode.of(command.instrumentCode());
         this.tradeType = command.tradeType();
         this.quantity = command.quantity();
         this.tradePrice = command.tradePrice();

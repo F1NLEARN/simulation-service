@@ -13,5 +13,9 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
 
     List<StockItem> findAllByAssetTypeOrderByStockCodeAsc(StockAssetType assetType);
 
+    List<StockItem> findAllByCurrentPriceIsNotNullOrderByStockCodeAsc();
+
+    List<StockItem> findAllByAssetTypeAndCurrentPriceIsNotNullOrderByStockCodeAsc(StockAssetType assetType);
+
     Optional<StockItem> findByStockCode(String stockCode);
 }

@@ -5,7 +5,7 @@ import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import java.math.BigDecimal;
 import java.util.UUID;
 
-public record StockItemResponse(
+public record StockItemDetailResponse(
         UUID id,
         String stockCode,
         String symbol,
@@ -14,8 +14,8 @@ public record StockItemResponse(
         BigDecimal currentPrice,
         boolean tradable
 ) {
-    public static StockItemResponse from(StockItem stockItem) {
-        return new StockItemResponse(
+    public static StockItemDetailResponse from(StockItem stockItem) {
+        return new StockItemDetailResponse(
                 stockItem.getStockItemId(),
                 stockItem.getStockCode(),
                 stockItem.getStockCode(),

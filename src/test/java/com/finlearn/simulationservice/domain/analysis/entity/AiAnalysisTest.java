@@ -160,7 +160,7 @@ class AiAnalysisTest {
     }
 
     @Test
-    @DisplayName("complete() 호출 시 상태가 COMPLETED로 변경된다.")
+    @DisplayName("READY 상태에서 complete() 호출 시 상태가 COMPLETED로 변경된다.")
     void complete_changesStatusToCompleted() {
         AiAnalysis aiAnalysis = createDefault();
 
@@ -170,13 +170,46 @@ class AiAnalysisTest {
     }
 
     @Test
-    @DisplayName("fail() 호출 시 상태가 FAILED로 변경된다.")
+    @DisplayName("READY 상태에서 fail() 호출 시 상태가 FAILED로 변경된다.")
     void fail_changesStatusToFailed() {
         AiAnalysis aiAnalysis = createDefault();
 
         aiAnalysis.fail();
 
         assertThat(aiAnalysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
+    }
+
+    @Test
+    @DisplayName("COMPLETED 상태에서 complete()를 다시 호출하면 CANNOT_COMPLETE 코드로 예외가 발생한다.")
+    void complete_whenAlreadyCompleted_throwsException() {
+        AiAnalysis aiAnalysis = createDefault();
+        aiAnalysis.complete();
+
+        assertThatThrownBy(aiAnalysis::complete)
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.CANNOT_COMPLETE.getMessage());
+    }
+
+    @Test
+    @DisplayName("COMPLETED 상태에서 fail()을 호출하면 CANNOT_FAIL 코드로 예외가 발생한다.")
+    void fail_whenAlreadyCompleted_throwsException() {
+        AiAnalysis aiAnalysis = createDefault();
+        aiAnalysis.complete();
+
+        assertThatThrownBy(aiAnalysis::fail)
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.CANNOT_FAIL.getMessage());
+    }
+
+    @Test
+    @DisplayName("FAILED 상태에서 complete()를 호출하면 CANNOT_COMPLETE 코드로 예외가 발생한다.")
+    void complete_whenAlreadyFailed_throwsException() {
+        AiAnalysis aiAnalysis = createDefault();
+        aiAnalysis.fail();
+
+        assertThatThrownBy(aiAnalysis::complete)
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.CANNOT_COMPLETE.getMessage());
     }
 
     @Test

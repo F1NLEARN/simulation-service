@@ -1,7 +1,8 @@
 package com.finlearn.simulationservice.domain.holding.entity;
 
-import com.finlearn.common.exception.BadRequestException;
 import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
+import com.finlearn.simulationservice.domain.holding.exception.HoldingDomainException;
+import com.finlearn.simulationservice.domain.holding.exception.HoldingErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -57,7 +58,7 @@ class HoldingTest {
     }
 
     @Test
-    @DisplayName("quantity가 음수이면 생성에 실패한다.")
+    @DisplayName("quantity가 음수이면 INVALID_QUANTITY 코드로 예외가 발생한다.")
     void create_withNegativeQuantity_throwsException() {
         CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
@@ -65,11 +66,12 @@ class HoldingTest {
         );
 
         assertThatThrownBy(() -> Holding.create(command))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_QUANTITY.getMessage());
     }
 
     @Test
-    @DisplayName("averageBuyPrice가 음수이면 생성에 실패한다.")
+    @DisplayName("averageBuyPrice가 음수이면 INVALID_AVERAGE_BUY_PRICE 코드로 예외가 발생한다.")
     void create_withNegativeAverageBuyPrice_throwsException() {
         CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
@@ -77,11 +79,12 @@ class HoldingTest {
         );
 
         assertThatThrownBy(() -> Holding.create(command))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_AVERAGE_BUY_PRICE.getMessage());
     }
 
     @Test
-    @DisplayName("currentPrice가 0 이하이면 생성에 실패한다.")
+    @DisplayName("currentPrice가 0 이하이면 INVALID_CURRENT_PRICE 코드로 예외가 발생한다.")
     void create_withNonPositiveCurrentPrice_throwsException() {
         CreateHoldingCommand command = new CreateHoldingCommand(
                 ACCOUNT_ID, HOLDING_NAME, SEASON_ID, SEASON_NUMBER,
@@ -89,7 +92,8 @@ class HoldingTest {
         );
 
         assertThatThrownBy(() -> Holding.create(command))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_CURRENT_PRICE.getMessage());
     }
 
     @Test
@@ -126,17 +130,19 @@ class HoldingTest {
     }
 
     @Test
-    @DisplayName("추가 매수 수량이 0 이하이면 예외가 발생한다.")
+    @DisplayName("추가 매수 수량이 0 이하이면 INVALID_BUY_QUANTITY 코드로 예외가 발생한다.")
     void addBuy_withNonPositiveQuantity_throwsException() {
         assertThatThrownBy(() -> createDefault().addBuy(0L, 80_000L))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_BUY_QUANTITY.getMessage());
     }
 
     @Test
-    @DisplayName("추가 매수 가격이 0 이하이면 예외가 발생한다.")
+    @DisplayName("추가 매수 가격이 0 이하이면 INVALID_BUY_PRICE 코드로 예외가 발생한다.")
     void addBuy_withNonPositivePrice_throwsException() {
         assertThatThrownBy(() -> createDefault().addBuy(5L, 0L))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_BUY_PRICE.getMessage());
     }
 
     @Test
@@ -163,17 +169,19 @@ class HoldingTest {
     }
 
     @Test
-    @DisplayName("매도 수량이 보유 수량을 초과하면 예외가 발생한다.")
+    @DisplayName("매도 수량이 보유 수량을 초과하면 EXCEED_SELL_QUANTITY 코드로 예외가 발생한다.")
     void sell_withExceedingQuantity_throwsException() {
         assertThatThrownBy(() -> createDefault().sell(QUANTITY + 1))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.EXCEED_SELL_QUANTITY.getMessage());
     }
 
     @Test
-    @DisplayName("매도 수량이 0 이하이면 예외가 발생한다.")
+    @DisplayName("매도 수량이 0 이하이면 INVALID_SELL_QUANTITY 코드로 예외가 발생한다.")
     void sell_withNonPositiveQuantity_throwsException() {
         assertThatThrownBy(() -> createDefault().sell(0L))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_SELL_QUANTITY.getMessage());
     }
 
     @Test
@@ -193,9 +201,10 @@ class HoldingTest {
     }
 
     @Test
-    @DisplayName("현재가가 0 이하이면 예외가 발생한다.")
+    @DisplayName("현재가가 0 이하이면 INVALID_UPDATE_PRICE 코드로 예외가 발생한다.")
     void updateCurrentPrice_withNonPositivePrice_throwsException() {
         assertThatThrownBy(() -> createDefault().updateCurrentPrice(0L))
-                .isInstanceOf(BadRequestException.class);
+                .isInstanceOf(HoldingDomainException.class)
+                .hasMessage(HoldingErrorCode.INVALID_UPDATE_PRICE.getMessage());
     }
 }

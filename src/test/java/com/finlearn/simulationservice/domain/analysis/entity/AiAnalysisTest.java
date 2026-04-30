@@ -1,7 +1,9 @@
 package com.finlearn.simulationservice.domain.analysis.entity;
 
-import com.finlearn.common.exception.BadRequestException;
+import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
 import com.finlearn.simulationservice.domain.analysis.enums.AnalysisStatus;
+import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisDomainException;
+import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -27,14 +29,18 @@ class AiAnalysisTest {
     private static final LocalDateTime PERIOD_END = LocalDateTime.of(2026, 4, 30, 23, 59);
     private static final LocalDateTime ANALYZED_AT = LocalDateTime.of(2026, 4, 30, 10, 0);
 
-    private AiAnalysis createDefault() {
-        return AiAnalysis.create(
+    private CreateAiAnalysisCommand defaultCommand() {
+        return new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
         );
+    }
+
+    private AiAnalysis createDefault() {
+        return AiAnalysis.create(defaultCommand());
     }
 
     @Test
@@ -58,75 +64,99 @@ class AiAnalysisTest {
     }
 
     @Test
-    @DisplayName("accountId가 null이면 생성에 실패한다.")
+    @DisplayName("accountId가 null이면 INVALID_ACCOUNT_ID 코드로 예외가 발생한다.")
     void create_withNullAccountId_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 null, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_ACCOUNT_ID.getMessage());
     }
 
     @Test
-    @DisplayName("targetUserId가 null이면 생성에 실패한다.")
+    @DisplayName("targetUserId가 null이면 INVALID_TARGET_USER_ID 코드로 예외가 발생한다.")
     void create_withNullTargetUserId_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, null, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_TARGET_USER_ID.getMessage());
     }
 
     @Test
-    @DisplayName("seasonId가 null이면 생성에 실패한다.")
+    @DisplayName("seasonId가 null이면 INVALID_SEASON_ID 코드로 예외가 발생한다.")
     void create_withNullSeasonId_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 null, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_SEASON_ID.getMessage());
     }
 
     @Test
-    @DisplayName("recommendedLearningTopic이 blank이면 생성에 실패한다.")
+    @DisplayName("recommendedLearningTopic이 blank이면 INVALID_RECOMMENDED_LEARNING_TOPIC 코드로 예외가 발생한다.")
     void create_withBlankRecommendedLearningTopic_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 "  ", AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_RECOMMENDED_LEARNING_TOPIC.getMessage());
     }
 
     @Test
-    @DisplayName("aiFeedbackMessage가 blank이면 생성에 실패한다.")
+    @DisplayName("aiFeedbackMessage가 blank이면 INVALID_AI_FEEDBACK_MESSAGE 코드로 예외가 발생한다.")
     void create_withBlankAiFeedbackMessage_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, "  ",
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_AI_FEEDBACK_MESSAGE.getMessage());
     }
 
     @Test
-    @DisplayName("분석 시작 기간이 종료 기간보다 이후이면 생성에 실패한다.")
+    @DisplayName("분석 시작 기간이 종료 기간보다 이후이면 INVALID_ANALYSIS_PERIOD 코드로 예외가 발생한다.")
     void create_withInvalidPeriod_throwsException() {
-        assertThatThrownBy(() -> AiAnalysis.create(
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_END, PERIOD_START, ANALYZED_AT
-        )).isInstanceOf(BadRequestException.class);
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_ANALYSIS_PERIOD.getMessage());
     }
 
     @Test
@@ -153,13 +183,13 @@ class AiAnalysisTest {
     @DisplayName("동일 계좌에 여러 AI 분석 이력을 생성할 수 있다.")
     void create_multipleAnalysisForSameAccount_success() {
         AiAnalysis first = createDefault();
-        AiAnalysis second = AiAnalysis.create(
+        AiAnalysis second = AiAnalysis.create(new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
                 new BigDecimal("30.00"), new BigDecimal("45.00"),
                 RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
                 PERIOD_START, PERIOD_END, ANALYZED_AT
-        );
+        ));
 
         assertThat(first.getAccountId()).isEqualTo(second.getAccountId());
         assertThat(first.getRiskScore()).isNotEqualByComparingTo(second.getRiskScore());

@@ -1,9 +1,9 @@
-package com.finlearn.simulationservice.domain.trade.entity;
+package com.finlearn.simulationservice.domain.tradehistory.entity;
 
 import com.finlearn.common.domain.BaseEntity;
-import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
-import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
-import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
+import com.finlearn.simulationservice.domain.tradehistory.command.CreateTradeHistoryCommand;
+import com.finlearn.simulationservice.domain.tradehistory.exception.TradeHistoryDomainException;
+import com.finlearn.simulationservice.domain.tradehistory.exception.TradeHistoryErrorCode;
 import com.finlearn.simulationservice.domain.vo.InstrumentCode;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.Column;
@@ -49,6 +49,10 @@ public class TradeHistory extends BaseEntity {
     @Column(nullable = false, length = 10)
     private TradeType tradeType;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 10)
+    private TradeStatus status;
+
     @Column(nullable = false)
     private long quantity;
 
@@ -71,6 +75,7 @@ public class TradeHistory extends BaseEntity {
         this.seasonNumber = command.seasonNumber();
         this.instrumentCode = InstrumentCode.of(command.instrumentCode());
         this.tradeType = command.tradeType();
+        this.status = TradeStatus.COMPLETED;
         this.quantity = command.quantity();
         this.tradePrice = command.tradePrice();
         this.totalTradeAmount = command.quantity() * command.tradePrice();
@@ -98,6 +103,14 @@ public class TradeHistory extends BaseEntity {
                 accountId, seasonId, seasonNumber, instrumentCode, TradeType.SELL,
                 quantity, tradePrice, tradeAt, cashBalanceAfterTrade
         ));
+    }
+
+    public void fail() {
+        this.status = TradeStatus.FAILED;
+    }
+
+    public void cancel() {
+        this.status = TradeStatus.CANCELED;
     }
 
     private static void validate(CreateTradeHistoryCommand command) {

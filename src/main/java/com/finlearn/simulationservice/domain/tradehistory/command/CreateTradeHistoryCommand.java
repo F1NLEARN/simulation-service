@@ -1,6 +1,6 @@
-package com.finlearn.simulationservice.domain.trade.command;
+package com.finlearn.simulationservice.domain.tradehistory.command;
 
-import com.finlearn.simulationservice.domain.trade.entity.TradeType;
+import com.finlearn.simulationservice.domain.tradehistory.entity.TradeType;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

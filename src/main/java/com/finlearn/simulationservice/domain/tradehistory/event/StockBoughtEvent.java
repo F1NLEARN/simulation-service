@@ -1,4 +1,4 @@
-package com.finlearn.simulationservice.domain.trade.event;
+package com.finlearn.simulationservice.domain.tradehistory.event;
 
 import java.time.LocalDateTime;
 import java.util.UUID;

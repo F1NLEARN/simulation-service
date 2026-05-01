@@ -1,4 +1,4 @@
-package com.finlearn.simulationservice.domain.trade.exception;
+package com.finlearn.simulationservice.domain.tradehistory.exception;
 
 import com.finlearn.common.exception.CustomException;
 import org.springframework.http.HttpStatus;

@@ -1,9 +1,8 @@
-package com.finlearn.simulationservice.domain.trade.entity;
+package com.finlearn.simulationservice.domain.tradehistory.entity;
 
-import com.finlearn.simulationservice.domain.trade.command.CreateTradeHistoryCommand;
-import com.finlearn.simulationservice.domain.trade.entity.TradeType;
-import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryDomainException;
-import com.finlearn.simulationservice.domain.trade.exception.TradeHistoryErrorCode;
+import com.finlearn.simulationservice.domain.tradehistory.command.CreateTradeHistoryCommand;
+import com.finlearn.simulationservice.domain.tradehistory.exception.TradeHistoryDomainException;
+import com.finlearn.simulationservice.domain.tradehistory.exception.TradeHistoryErrorCode;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 

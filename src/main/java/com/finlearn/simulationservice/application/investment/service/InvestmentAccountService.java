@@ -7,6 +7,7 @@ import com.finlearn.simulationservice.domain.investment.exception.InvestmentErro
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import java.math.BigDecimal;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,7 +22,7 @@ public class InvestmentAccountService {
     private final InvestmentAccountRepository investmentAccountRepository;
 
     @Transactional
-    public InvestmentAccountResponse createAccount(String userId) {
+    public InvestmentAccountResponse createAccount(UUID userId) {
         investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .ifPresent(account -> {
                     throw new InvestmentException(InvestmentErrorCode.ACTIVE_INVESTMENT_ACCOUNT_ALREADY_EXISTS);
@@ -32,7 +33,7 @@ public class InvestmentAccountService {
         return InvestmentAccountResponse.from(saved);
     }
 
-    public InvestmentAccountResponse getMyAccount(String userId) {
+    public InvestmentAccountResponse getMyAccount(UUID userId) {
         InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
         return InvestmentAccountResponse.from(account);

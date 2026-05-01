@@ -12,6 +12,7 @@ import com.finlearn.simulationservice.domain.trade.enums.TradeType;
 import com.finlearn.simulationservice.domain.trade.repository.TradeHistoryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -29,7 +30,7 @@ public class InvestmentTradeService {
     private final TradeHistoryRepository tradeHistoryRepository;
 
     public TradeHistoryListResponse getTradeHistories(
-            String userId,
+            UUID userId,
             String stockCode,
             String tradeType,
             int page,

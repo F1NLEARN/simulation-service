@@ -7,6 +7,7 @@ import com.finlearn.simulationservice.application.investment.dto.response.BuySto
 import com.finlearn.simulationservice.application.investment.dto.response.SellStockResponse;
 import com.finlearn.simulationservice.application.investment.service.InvestmentOrderService;
 import jakarta.validation.Valid;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,19 +24,21 @@ public class InvestmentOrderController {
 
     @PostMapping("/buy")
     public CommonResponse<BuyStockResponse> buy(
-            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Id") String userIdHeader,
             @Valid @RequestBody BuyOrderRequest request
     ) {
         // TODO: Gateway/JWT 연동 후 X-User-Id 대신 인증 컨텍스트에서 userId를 추출하도록 변경
+        UUID userId = InvestmentUserIdHeaderParser.parse(userIdHeader);
         return CommonResponse.success("매수 주문 성공", investmentOrderService.buy(userId, request));
     }
 
     @PostMapping("/sell")
     public CommonResponse<SellStockResponse> sell(
-            @RequestHeader("X-User-Id") String userId,
+            @RequestHeader("X-User-Id") String userIdHeader,
             @Valid @RequestBody SellOrderRequest request
     ) {
         // TODO: Gateway/JWT 연동 후 X-User-Id 대신 인증 컨텍스트에서 userId를 추출하도록 변경
+        UUID userId = InvestmentUserIdHeaderParser.parse(userIdHeader);
         return CommonResponse.success("매도 주문 성공", investmentOrderService.sell(userId, request));
     }
 }

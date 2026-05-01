@@ -13,6 +13,7 @@ import com.finlearn.simulationservice.domain.investment.repository.StockItemRepo
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -26,7 +27,7 @@ public class InvestmentHoldingService {
     private final HoldingRepository holdingRepository;
     private final StockItemRepository stockItemRepository;
 
-    public List<HoldingResponse> getMyHoldings(String userId) {
+    public List<HoldingResponse> getMyHoldings(UUID userId) {
         InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 

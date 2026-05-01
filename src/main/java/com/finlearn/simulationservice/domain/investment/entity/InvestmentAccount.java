@@ -36,8 +36,8 @@ public class InvestmentAccount extends BaseEntity {
     @Column
     private UUID seasonParticipantId;
 
-    @Column(length = 64)
-    private String userId;
+    @Column(name = "user_id", columnDefinition = "uuid")
+    private UUID userId;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -69,7 +69,7 @@ public class InvestmentAccount extends BaseEntity {
         return new InvestmentAccount(seasonParticipantId, seedMoney);
     }
 
-    public static InvestmentAccount openForUser(String userId, BigDecimal seedMoney) {
+    public static InvestmentAccount openForUser(UUID userId, BigDecimal seedMoney) {
         InvestmentAccount account = new InvestmentAccount(null, seedMoney);
         account.userId = userId;
         return account;

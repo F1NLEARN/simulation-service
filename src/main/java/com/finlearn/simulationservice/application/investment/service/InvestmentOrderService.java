@@ -39,7 +39,7 @@ public class InvestmentOrderService {
     private final TradeHistoryRepository tradeHistoryRepository;
 
     @Transactional
-    public BuyStockResponse buy(String userId, BuyOrderRequest request) {
+    public BuyStockResponse buy(UUID userId, BuyOrderRequest request) {
         if (request.quantity() <= 0) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
@@ -112,7 +112,7 @@ public class InvestmentOrderService {
     }
 
     @Transactional
-    public SellStockResponse sell(String userId, SellOrderRequest request) {
+    public SellStockResponse sell(UUID userId, SellOrderRequest request) {
         if (request.quantity() <= 0) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }

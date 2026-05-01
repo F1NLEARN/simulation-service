@@ -13,10 +13,17 @@ import java.util.UUID;
 public interface HoldingJpaRepository extends JpaRepository<Holding, UUID>, HoldingRepository {
 
     @Override
+    Optional<Holding> findById(UUID holdingId);
+
+    @Override
     @Query("SELECT h FROM Holding h WHERE h.accountId = :accountId AND h.instrumentCode.value = :instrumentCode")
     Optional<Holding> findByAccountIdAndInstrumentCode(@Param("accountId") UUID accountId,
                                                        @Param("instrumentCode") String instrumentCode);
 
     @Override
-    List<Holding> findAllByAccountId(UUID accountId);
+    @Query("SELECT h FROM Holding h " +
+            "WHERE h.accountId = :accountId " +
+            "AND (:instrumentCode IS NULL OR h.instrumentCode.value = :instrumentCode)")
+    List<Holding> findAllWithFilter(@Param("accountId") UUID accountId,
+                                    @Param("instrumentCode") String instrumentCode);
 }

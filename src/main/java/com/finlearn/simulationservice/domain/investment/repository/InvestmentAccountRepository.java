@@ -7,5 +7,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface InvestmentAccountRepository extends JpaRepository<InvestmentAccount, UUID> {
 
-    Optional<InvestmentAccount> findBySeasonParticipantId(UUID seasonParticipantId);
+    Optional<InvestmentAccount> findByParticipant_InvestorIdAndParticipant_SeasonId(UUID investorId, UUID seasonId);
 }

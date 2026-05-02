@@ -1,14 +1,15 @@
 package com.finlearn.simulationservice.domain.investment.entity;
 
 import com.finlearn.common.domain.BaseEntity;
+import com.finlearn.simulationservice.domain.investment.enums.SeedMoneyGrantType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import jakarta.persistence.UniqueConstraint;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
@@ -17,51 +18,62 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(
-        name = "seed_money_grant_histories",
-        uniqueConstraints = {
-                @UniqueConstraint(name = "uk_seed_money_grant_history_season_user", columnNames = {"season_id", "user_id"})
-        }
-)
+@Table(name = "seed_money_grant_histories")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SeedMoneyGrantHistory extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID seedMoneyGrantHistoryId;
-
-    @Column(name = "user_id", nullable = false)
-    private UUID userId;
-
-    @Column(name = "season_id", nullable = false)
-    private UUID seasonId;
+    @Column(name = "grant_history_id")
+    private UUID grantHistoryId;
 
     @Column(name = "account_id", nullable = false)
     private UUID accountId;
 
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal amount;
+    @Column(name = "season_id", nullable = false)
+    private UUID seasonId;
 
-    @Column(name = "granted_at", nullable = false)
-    private LocalDateTime grantedAt;
+    @Column(name = "season_number", nullable = false)
+    private int seasonNumber;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "grant_type", nullable = false, length = 20)
+    private SeedMoneyGrantType grantType;
+
+    @Column(name = "grant_amount", nullable = false)
+    private long grantAmount;
+
+    @Column(name = "grant_reason", nullable = false, length = 255)
+    private String grantReason;
+
+    @Column(name = "grant_at", nullable = false)
+    private LocalDateTime grantAt;
 
     @Builder
-    private SeedMoneyGrantHistory(UUID userId, UUID seasonId, UUID accountId, BigDecimal amount, LocalDateTime grantedAt) {
-        this.userId = userId;
-        this.seasonId = seasonId;
+    private SeedMoneyGrantHistory(UUID accountId, UUID seasonId, int seasonNumber,
+                                  SeedMoneyGrantType grantType, long grantAmount,
+                                  String grantReason, LocalDateTime grantAt) {
         this.accountId = accountId;
-        this.amount = amount;
-        this.grantedAt = grantedAt;
+        this.seasonId = seasonId;
+        this.seasonNumber = seasonNumber;
+        this.grantType = grantType;
+        this.grantAmount = grantAmount;
+        this.grantReason = grantReason;
+        this.grantAt = grantAt;
     }
 
-    public static SeedMoneyGrantHistory grant(UUID userId, UUID seasonId, UUID accountId, BigDecimal amount, LocalDateTime grantedAt) {
+    public static SeedMoneyGrantHistory grant(UUID accountId, UUID seasonId, int seasonNumber,
+                                              SeedMoneyGrantType grantType, long grantAmount,
+                                              String grantReason, LocalDateTime grantAt) {
         return SeedMoneyGrantHistory.builder()
-                .userId(userId)
-                .seasonId(seasonId)
                 .accountId(accountId)
-                .amount(amount)
-                .grantedAt(grantedAt)
+                .seasonId(seasonId)
+                .seasonNumber(seasonNumber)
+                .grantType(grantType)
+                .grantAmount(grantAmount)
+                .grantReason(grantReason)
+                .grantAt(grantAt)
                 .build();
     }
 }

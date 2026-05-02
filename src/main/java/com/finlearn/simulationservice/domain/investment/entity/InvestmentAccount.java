@@ -2,197 +2,219 @@ package com.finlearn.simulationservice.domain.investment.entity;
 
 import com.finlearn.common.domain.BaseEntity;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
-import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
+import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
+import jakarta.persistence.Embedded;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
-import jakarta.persistence.Transient;
+import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.AccessLevel;
+import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 @Entity
-@Table(name = "investment_accounts")
+@Table(
+        name = "season_investment_account",
+        uniqueConstraints = {
+                @UniqueConstraint(name = "uk_investment_account_investor_season", columnNames = {"investor_id", "season_id"})
+        }
+)
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class InvestmentAccount extends BaseEntity {
 
     @Id
     @GeneratedValue(strategy = GenerationType.UUID)
-    private UUID investmentAccountId;
+    @Column(name = "account_id")
+    private UUID accountId;
 
-    @Column
-    private UUID seasonParticipantId;
-
-    @Column(name = "user_id", columnDefinition = "uuid")
-    private UUID userId;
+    @Embedded
+    private SeasonParticipant participant;
 
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
+    @Column(name = "account_status", nullable = false, length = 20)
     private InvestmentAccountStatus status;
 
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal seedMoney;
+    @Column(name = "initial_seed_money", nullable = false)
+    private long initialSeedMoney;
 
-    @Column(nullable = false, precision = 19, scale = 2)
-    private BigDecimal cashBalance;
+    @Column(name = "current_cash_balance", nullable = false)
+    private long currentCashBalance;
 
-    @Transient
+    @Column(name = "total_valuation_amount", nullable = false)
+    private long totalValuationAmount;
+
+    @Column(name = "total_asset_amount", nullable = false)
+    private long totalAssetAmount;
+
+    @Column(name = "realized_profit_loss", nullable = false)
+    private long realizedProfitLoss;
+
+    @Column(name = "unrealized_profit_loss", nullable = false)
+    private long unrealizedProfitLoss;
+
+    @Column(name = "total_return_rate", nullable = false, precision = 8, scale = 2)
+    private BigDecimal totalReturnRate;
+
+    @OneToMany(mappedBy = "investmentAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<HoldingStock> holdingStocks = new ArrayList<>();
 
-    @Transient
+    @OneToMany(mappedBy = "investmentAccount", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     private final List<StockTransaction> stockTransactions = new ArrayList<>();
 
-    private InvestmentAccount(UUID seasonParticipantId, BigDecimal seedMoney) {
-        if (seedMoney == null || seedMoney.compareTo(BigDecimal.ZERO) < 0) {
-            throw new InvestmentException(InvestmentErrorCode.INVALID_SEED_MONEY);
-        }
-        this.seasonParticipantId = seasonParticipantId;
-        this.seedMoney = seedMoney;
-        this.cashBalance = seedMoney;
-        this.status = InvestmentAccountStatus.ACTIVE;
+    @Builder
+    private InvestmentAccount(SeasonParticipant participant, InvestmentAccountStatus status,
+                              long initialSeedMoney, long currentCashBalance, long totalValuationAmount,
+                              long totalAssetAmount, long realizedProfitLoss, long unrealizedProfitLoss,
+                              BigDecimal totalReturnRate) {
+        this.participant = participant;
+        this.status = status;
+        this.initialSeedMoney = initialSeedMoney;
+        this.currentCashBalance = currentCashBalance;
+        this.totalValuationAmount = totalValuationAmount;
+        this.totalAssetAmount = totalAssetAmount;
+        this.realizedProfitLoss = realizedProfitLoss;
+        this.unrealizedProfitLoss = unrealizedProfitLoss;
+        this.totalReturnRate = totalReturnRate;
     }
 
-    public static InvestmentAccount open(UUID seasonParticipantId, BigDecimal seedMoney) {
-        return new InvestmentAccount(seasonParticipantId, seedMoney);
+    public static InvestmentAccount open(SeasonParticipant participant, long seedMoney) {
+        validateSeedMoney(seedMoney);
+        return InvestmentAccount.builder()
+                .participant(participant)
+                .status(InvestmentAccountStatus.ACTIVE)
+                .initialSeedMoney(seedMoney)
+                .currentCashBalance(seedMoney)
+                .totalValuationAmount(0L)
+                .totalAssetAmount(seedMoney)
+                .realizedProfitLoss(0L)
+                .unrealizedProfitLoss(0L)
+                .totalReturnRate(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP))
+                .build();
     }
 
-    public static InvestmentAccount openForUser(UUID userId, BigDecimal seedMoney) {
-        InvestmentAccount account = new InvestmentAccount(null, seedMoney);
-        account.userId = userId;
-        return account;
-    }
-
-    public void close() {
-        this.status = InvestmentAccountStatus.CLOSED;
-    }
-
-    public void addCashBalance(BigDecimal amount) {
-        ensureActive();
-        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
-            throw new InvestmentException(InvestmentErrorCode.INVALID_STOCK_PRICE);
-        }
-        this.cashBalance = this.cashBalance.add(amount);
-    }
-
-    public StockTransaction buy(StockAssetType assetType, String symbol, long quantity, BigDecimal unitPrice, LocalDateTime executedAt) {
-        ensureActive();
-        validateOrder(quantity, unitPrice);
-
-        BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
-        if (cashBalance.compareTo(totalAmount) < 0) {
+    public StockTransaction buy(String instrumentCode, String holdingName, long quantity, long tradePrice,
+                                LocalDateTime tradeAt) {
+        ensureTradable();
+        long totalOrderAmount = calculateOrderAmount(quantity, tradePrice);
+        if (this.currentCashBalance < totalOrderAmount) {
             throw new InvestmentException(InvestmentErrorCode.INSUFFICIENT_CASH);
         }
 
-        HoldingStock holding = findHolding(assetType, symbol);
-        if (holding == null) {
-            holding = new HoldingStock(assetType, normalizeSymbol(symbol), quantity);
-            this.holdingStocks.add(holding);
+        Optional<HoldingStock> existingHolding = findHolding(instrumentCode);
+        if (existingHolding.isPresent()) {
+            existingHolding.get().buy(quantity, tradePrice);
         } else {
-            holding.addQuantity(quantity);
+            HoldingStock created = HoldingStock.open(this, instrumentCode, holdingName,
+                    participant.getSeasonId(), participant.getSeasonNumber(), quantity, tradePrice);
+            this.holdingStocks.add(created);
         }
 
-        this.cashBalance = this.cashBalance.subtract(totalAmount);
+        this.currentCashBalance -= totalOrderAmount;
 
-        StockTransaction tx = StockTransaction.buy(
-                assetType,
-                normalizeSymbol(symbol),
-                quantity,
-                unitPrice,
-                executedAt == null ? LocalDateTime.now() : executedAt
-        );
-        this.stockTransactions.add(tx);
-        return tx;
+        StockTransaction transaction = StockTransaction.buy(this, participant.getSeasonId(),
+                participant.getSeasonNumber(), instrumentCode, quantity, tradePrice,
+                this.currentCashBalance, tradeAt);
+        this.stockTransactions.add(transaction);
+
+        recalculateAccountSummary();
+        return transaction;
     }
 
-    public StockTransaction sell(StockAssetType assetType, String symbol, long quantity, BigDecimal unitPrice, LocalDateTime executedAt) {
-        ensureActive();
-        validateOrder(quantity, unitPrice);
+    public StockTransaction sell(String instrumentCode, long quantity, long tradePrice, LocalDateTime tradeAt) {
+        ensureTradable();
+        calculateOrderAmount(quantity, tradePrice);
 
-        HoldingStock holding = findHolding(assetType, symbol);
-        if (holding == null) {
-            throw new InvestmentException(InvestmentErrorCode.HOLDING_STOCK_NOT_FOUND);
+        HoldingStock holdingStock = findHolding(instrumentCode)
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.HOLDING_STOCK_NOT_FOUND));
+
+        long realizedProfit = (tradePrice - holdingStock.getAverageBuyPrice()) * quantity;
+        holdingStock.sell(quantity, tradePrice);
+
+        this.currentCashBalance += tradePrice * quantity;
+        this.realizedProfitLoss += realizedProfit;
+
+        if (holdingStock.isEmpty()) {
+            this.holdingStocks.remove(holdingStock);
         }
-        if (holding.getQuantity() < quantity) {
-            throw new InvestmentException(InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY);
-        }
 
-        holding.subtractQuantity(quantity);
-        if (holding.getQuantity() == 0) {
-            this.holdingStocks.remove(holding);
-        }
+        StockTransaction transaction = StockTransaction.sell(this, participant.getSeasonId(),
+                participant.getSeasonNumber(), instrumentCode, quantity, tradePrice,
+                this.currentCashBalance, tradeAt);
+        this.stockTransactions.add(transaction);
 
-        BigDecimal totalAmount = unitPrice.multiply(BigDecimal.valueOf(quantity));
-        this.cashBalance = this.cashBalance.add(totalAmount);
-
-        StockTransaction tx = StockTransaction.sell(
-                assetType,
-                normalizeSymbol(symbol),
-                quantity,
-                unitPrice,
-                executedAt == null ? LocalDateTime.now() : executedAt
-        );
-        this.stockTransactions.add(tx);
-        return tx;
+        recalculateAccountSummary();
+        return transaction;
     }
 
-    private void ensureActive() {
+    public void close() {
+        if (this.status != InvestmentAccountStatus.ACTIVE) {
+            throw new InvestmentException(InvestmentErrorCode.INVALID_ACCOUNT_STATUS);
+        }
+        this.status = InvestmentAccountStatus.CLOSED;
+    }
+
+    private void ensureTradable() {
         if (this.status != InvestmentAccountStatus.ACTIVE) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ACCOUNT_STATUS);
         }
     }
 
-    private void validateOrder(long quantity, BigDecimal unitPrice) {
+    private Optional<HoldingStock> findHolding(String instrumentCode) {
+        return this.holdingStocks.stream()
+                .filter(h -> h.isSameStock(instrumentCode))
+                .findFirst();
+    }
+
+    private long calculateOrderAmount(long quantity, long tradePrice) {
         if (quantity <= 0) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
-        if (unitPrice == null || unitPrice.compareTo(BigDecimal.ZERO) <= 0) {
+        if (tradePrice <= 0) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_STOCK_PRICE);
         }
+        return tradePrice * quantity;
     }
 
-    private HoldingStock findHolding(StockAssetType assetType, String symbol) {
-        String normalizedSymbol = normalizeSymbol(symbol);
-        return this.holdingStocks.stream()
-                .filter(h -> h.getAssetType() == assetType && h.getSymbol().equals(normalizedSymbol))
-                .findFirst()
-                .orElse(null);
-    }
+    private void recalculateAccountSummary() {
+        this.totalValuationAmount = this.holdingStocks.stream()
+                .mapToLong(HoldingStock::getValuationAmount)
+                .sum();
+        this.totalAssetAmount = this.currentCashBalance + this.totalValuationAmount;
+        this.unrealizedProfitLoss = this.holdingStocks.stream()
+                .mapToLong(HoldingStock::getUnrealizedProfitLoss)
+                .sum();
 
-    private String normalizeSymbol(String symbol) {
-        return symbol == null ? null : symbol.trim().toUpperCase();
-    }
-
-    @Getter
-    public static class HoldingStock {
-        private final StockAssetType assetType;
-        private final String symbol;
-        private long quantity;
-
-        public HoldingStock(StockAssetType assetType, String symbol, long quantity) {
-            this.assetType = assetType;
-            this.symbol = symbol;
-            this.quantity = quantity;
+        if (this.initialSeedMoney == 0) {
+            this.totalReturnRate = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+            return;
         }
+        this.totalReturnRate = BigDecimal.valueOf(this.totalAssetAmount - this.initialSeedMoney)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(this.initialSeedMoney), 2, RoundingMode.HALF_UP);
+    }
 
-        public void addQuantity(long quantity) {
-            this.quantity += quantity;
-        }
-
-        public void subtractQuantity(long quantity) {
-            this.quantity -= quantity;
+    private static void validateSeedMoney(long seedMoney) {
+        if (seedMoney < 0) {
+            throw new InvestmentException(InvestmentErrorCode.INVALID_SEED_MONEY);
         }
     }
 }

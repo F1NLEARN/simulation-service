@@ -8,7 +8,10 @@ import java.util.UUID;
 
 public record BuyStockRequest(
         @NotNull(message = "투자계좌 ID는 필수입니다.")
-        UUID investmentAccountId,
+        UUID accountId,
+
+        String instrumentCode,
+
         @NotNull(message = "자산 유형은 필수입니다.")
         StockAssetType assetType,
         @NotBlank(message = "종목 코드는 필수입니다.")

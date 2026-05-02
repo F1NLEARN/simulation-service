@@ -9,7 +9,7 @@ import com.finlearn.simulationservice.application.investment.dto.response.StockP
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.SeedMoneyGrantHistory;
-import com.finlearn.simulationservice.domain.investment.entity.SeasonParticipant;
+import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import com.finlearn.simulationservice.domain.investment.event.PointQuizPassedEvent;
@@ -19,13 +19,12 @@ import com.finlearn.simulationservice.domain.investment.event.StockBoughtEvent;
 import com.finlearn.simulationservice.domain.investment.event.StockSoldEvent;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
-import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.FavoriteStockRepository;
-import com.finlearn.simulationservice.domain.investment.repository.SeasonParticipantRepository;
+import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.SeedMoneyGrantHistoryRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
-import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -40,6 +39,7 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.test.util.ReflectionTestUtils;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
@@ -53,9 +53,6 @@ class InvestmentServiceTest {
 
     @Mock
     private FavoriteStockRepository favoriteStockRepository;
-
-    @Mock
-    private SeasonParticipantRepository seasonParticipantRepository;
 
     @Mock
     private InvestmentAccountRepository investmentAccountRepository;
@@ -75,28 +72,28 @@ class InvestmentServiceTest {
     @InjectMocks
     private InvestmentService investmentService;
 
+    private static SeasonParticipant testParticipant(UUID investorId, UUID seasonId) {
+        return new SeasonParticipant(investorId, "테스트유저", seasonId, 1);
+    }
+
+    // ===== handlePointQuizPassed =====
+
     @Test
-    @DisplayName("포인트 퀴즈 통과 시 참여자/계좌를 생성하고 이벤트를 발행한다.")
-    void handlePointQuizPassedCreateParticipantAndAccount() {
+    @DisplayName("포인트 퀴즈 통과 시 계좌를 생성하고 이벤트를 발행한다.")
+    void handlePointQuizPassedCreateAccount() {
         UUID seasonId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        BigDecimal seedMoney = new BigDecimal("1000000.00");
-        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, userId, seedMoney);
+        UUID investorId = UUID.randomUUID();
+        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, 1, investorId, "테스트유저", 1000000L);
 
-        SeasonParticipant savedParticipant = SeasonParticipant.create(seasonId, userId);
-        UUID seasonParticipantId = UUID.randomUUID();
-        ReflectionTestUtils.setField(savedParticipant, "seasonParticipantId", seasonParticipantId);
-        InvestmentAccount savedAccount = InvestmentAccount.open(seasonParticipantId, seedMoney);
-        ReflectionTestUtils.setField(savedAccount, "investmentAccountId", UUID.randomUUID());
+        InvestmentAccount savedAccount = InvestmentAccount.open(testParticipant(investorId, seasonId), 1000000L);
+        ReflectionTestUtils.setField(savedAccount, "accountId", UUID.randomUUID());
 
-        when(seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId)).thenReturn(Optional.empty());
-        when(seasonParticipantRepository.save(any(SeasonParticipant.class))).thenReturn(savedParticipant);
-        when(investmentAccountRepository.findBySeasonParticipantId(seasonParticipantId)).thenReturn(Optional.empty());
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndParticipant_SeasonId(investorId, seasonId))
+                .thenReturn(Optional.empty());
         when(investmentAccountRepository.save(any(InvestmentAccount.class))).thenReturn(savedAccount);
 
         investmentService.handlePointQuizPassed(event);
 
-        verify(seasonParticipantRepository, times(1)).save(any(SeasonParticipant.class));
         verify(investmentAccountRepository, times(1)).save(any(InvestmentAccount.class));
         verify(seedMoneyGrantHistoryRepository, times(1)).save(any(SeedMoneyGrantHistory.class));
         verify(eventPublisher, times(1)).publishEvent(any(SeasonInvestmentAccountOpenedEvent.class));
@@ -104,76 +101,60 @@ class InvestmentServiceTest {
     }
 
     @Test
-    @DisplayName("같은 시즌 참여자와 계좌가 이미 있으면 아무것도 생성하지 않는다.")
+    @DisplayName("계좌가 이미 있으면 아무것도 생성하지 않는다.")
     void handlePointQuizPassedSkipWhenAlreadyExists() {
         UUID seasonId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        BigDecimal seedMoney = new BigDecimal("1000000.00");
-        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, userId, seedMoney);
+        UUID investorId = UUID.randomUUID();
+        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, 1, investorId, "테스트유저", 1000000L);
 
-        SeasonParticipant existingParticipant = SeasonParticipant.create(seasonId, userId);
-        UUID seasonParticipantId = UUID.randomUUID();
-        ReflectionTestUtils.setField(existingParticipant, "seasonParticipantId", seasonParticipantId);
+        InvestmentAccount existingAccount = InvestmentAccount.open(testParticipant(investorId, seasonId), 1000000L);
 
-        InvestmentAccount existingAccount = InvestmentAccount.open(seasonParticipantId, seedMoney);
-
-        when(seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId))
-                .thenReturn(Optional.of(existingParticipant));
-        when(investmentAccountRepository.findBySeasonParticipantId(seasonParticipantId))
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndParticipant_SeasonId(investorId, seasonId))
                 .thenReturn(Optional.of(existingAccount));
 
         investmentService.handlePointQuizPassed(event);
 
-        verify(seasonParticipantRepository, never()).save(any(SeasonParticipant.class));
         verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
         verify(seedMoneyGrantHistoryRepository, never()).save(any(SeedMoneyGrantHistory.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 
     @Test
-    @DisplayName("참여자만 있고 계좌가 없으면 계좌를 생성하고 이벤트를 발행한다.")
-    void handlePointQuizPassedCreateAccountOnlyWhenParticipantExists() {
+    @DisplayName("계좌 생성 중 유니크 충돌이 발생하면 재조회로 복구하고 이벤트를 중복 발행하지 않는다.")
+    void handlePointQuizPassedRecoverWhenAccountUniqueConflict() {
         UUID seasonId = UUID.randomUUID();
-        UUID userId = UUID.randomUUID();
-        BigDecimal seedMoney = new BigDecimal("1000000.00");
-        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, userId, seedMoney);
+        UUID investorId = UUID.randomUUID();
+        PointQuizPassedEvent event = new PointQuizPassedEvent(seasonId, 1, investorId, "테스트유저", 1000000L);
 
-        SeasonParticipant existingParticipant = SeasonParticipant.create(seasonId, userId);
-        UUID seasonParticipantId = UUID.randomUUID();
-        ReflectionTestUtils.setField(existingParticipant, "seasonParticipantId", seasonParticipantId);
-        InvestmentAccount savedAccount = InvestmentAccount.open(seasonParticipantId, seedMoney);
-        ReflectionTestUtils.setField(savedAccount, "investmentAccountId", UUID.randomUUID());
+        InvestmentAccount existingAccount = InvestmentAccount.open(testParticipant(investorId, seasonId), 1000000L);
 
-        when(seasonParticipantRepository.findBySeasonIdAndUserId(seasonId, userId))
-                .thenReturn(Optional.of(existingParticipant));
-        when(investmentAccountRepository.findBySeasonParticipantId(seasonParticipantId))
-                .thenReturn(Optional.empty());
-        when(investmentAccountRepository.save(any(InvestmentAccount.class))).thenReturn(savedAccount);
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndParticipant_SeasonId(investorId, seasonId))
+                .thenReturn(Optional.empty(), Optional.of(existingAccount));
+        when(investmentAccountRepository.save(any(InvestmentAccount.class)))
+                .thenThrow(new DataIntegrityViolationException("unique constraint"));
 
-        investmentService.handlePointQuizPassed(event);
+        assertDoesNotThrow(() -> investmentService.handlePointQuizPassed(event));
 
-        verify(seasonParticipantRepository, never()).save(any(SeasonParticipant.class));
-        ArgumentCaptor<InvestmentAccount> accountCaptor = ArgumentCaptor.forClass(InvestmentAccount.class);
-        verify(investmentAccountRepository, times(1)).save(accountCaptor.capture());
-        verify(seedMoneyGrantHistoryRepository, times(1)).save(any(SeedMoneyGrantHistory.class));
-        verify(eventPublisher, times(1)).publishEvent(any(SeasonInvestmentAccountOpenedEvent.class));
-        verify(eventPublisher, times(1)).publishEvent(any(SeedMoneyGrantedEvent.class));
-        assertEquals(seasonParticipantId, accountCaptor.getValue().getSeasonParticipantId());
+        verify(investmentAccountRepository, times(1)).save(any(InvestmentAccount.class));
+        verify(seedMoneyGrantHistoryRepository, never()).save(any(SeedMoneyGrantHistory.class));
+        verify(eventPublisher, never()).publishEvent(any());
     }
+
+    // ===== buyStock =====
 
     @Test
     @DisplayName("매수 주문 성공 시 거래 이력 저장, 보유 종목 갱신, 예수금 차감 후 StockBought 이벤트를 발행한다.")
     void buyStockSuccess() {
         UUID accountId = UUID.randomUUID();
-        UUID seasonParticipantId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(seasonParticipantId, new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
 
-        BuyStockRequest request = new BuyStockRequest(accountId, StockAssetType.STOCK, "005930", 10);
+        BuyStockRequest request = new BuyStockRequest(accountId, "005930", 10);
+        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 5000L);
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930"))
-                .thenReturn(Optional.of(new BigDecimal("5000.00")));
+        when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
 
         investmentService.buyStock(request);
 
@@ -182,7 +163,7 @@ class InvestmentServiceTest {
         verify(eventPublisher, times(1)).publishEvent(any(StockBoughtEvent.class));
 
         InvestmentAccount saved = accountCaptor.getValue();
-        assertEquals(new BigDecimal("50000.00"), saved.getCashBalance());
+        assertEquals(50000L, saved.getCurrentCashBalance());
         assertEquals(1, saved.getHoldingStocks().size());
         assertEquals(1, saved.getStockTransactions().size());
     }
@@ -191,17 +172,18 @@ class InvestmentServiceTest {
     @DisplayName("계좌가 ACTIVE가 아니면 매수에 실패한다.")
     void buyStockFailWhenAccountNotActive() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
         account.close();
 
-        BuyStockRequest request = new BuyStockRequest(accountId, StockAssetType.STOCK, "005930", 1);
+        BuyStockRequest request = new BuyStockRequest(accountId, "005930", 1);
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.buyStock(request));
 
         assertEquals(InvestmentErrorCode.INVALID_ACCOUNT_STATUS, exception.getErrorCode());
-        verify(stockPriceRepository, never()).findCurrentPrice(any(), any());
+        verify(stockItemRepository, never()).findByStockCode(any());
         verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -210,12 +192,13 @@ class InvestmentServiceTest {
     @DisplayName("현재 시세가 없으면 매수에 실패한다.")
     void buyStockFailWhenStockPriceNotFound() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
-        BuyStockRequest request = new BuyStockRequest(accountId, StockAssetType.STOCK, "005930", 1);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
+        BuyStockRequest request = new BuyStockRequest(accountId, "005930", 1);
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930")).thenReturn(Optional.empty());
+        when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.empty());
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.buyStock(request));
 
@@ -228,13 +211,14 @@ class InvestmentServiceTest {
     @DisplayName("예수금이 부족하면 매수에 실패한다.")
     void buyStockFailWhenCashInsufficient() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("1000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
-        BuyStockRequest request = new BuyStockRequest(accountId, StockAssetType.STOCK, "005930", 2);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 1000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
+        BuyStockRequest request = new BuyStockRequest(accountId, "005930", 2);
+        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 1000L);
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930"))
-                .thenReturn(Optional.of(new BigDecimal("1000.00")));
+        when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.buyStock(request));
 
@@ -243,20 +227,21 @@ class InvestmentServiceTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+    // ===== sellStock =====
+
     @Test
     @DisplayName("매도 주문 성공 시 거래 이력 저장, 보유 종목 수량 차감, 예수금 증가 후 StockSold 이벤트를 발행한다.")
     void sellStockSuccess() {
         UUID accountId = UUID.randomUUID();
-        UUID seasonParticipantId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(seasonParticipantId, new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
-        account.buy(StockAssetType.STOCK, "005930", 10, new BigDecimal("5000.00"), null);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
+        account.buy("005930", "삼성전자", 10, 5000L, null);
 
-        SellStockRequest request = new SellStockRequest(accountId, StockAssetType.STOCK, "005930", 10);
+        SellStockRequest request = new SellStockRequest(accountId, "005930", 10);
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930"))
-                .thenReturn(Optional.of(new BigDecimal("6000.00")));
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(6000L));
 
         investmentService.sellStock(request);
 
@@ -265,7 +250,7 @@ class InvestmentServiceTest {
         verify(eventPublisher, times(1)).publishEvent(any(StockSoldEvent.class));
 
         InvestmentAccount saved = accountCaptor.getValue();
-        assertEquals(new BigDecimal("110000.00"), saved.getCashBalance());
+        assertEquals(110000L, saved.getCurrentCashBalance());
         assertEquals(0, saved.getHoldingStocks().size());
         assertEquals(2, saved.getStockTransactions().size());
     }
@@ -274,17 +259,18 @@ class InvestmentServiceTest {
     @DisplayName("계좌가 ACTIVE가 아니면 매도에 실패한다.")
     void sellStockFailWhenAccountNotActive() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
         account.close();
 
-        SellStockRequest request = new SellStockRequest(accountId, StockAssetType.STOCK, "005930", 1);
+        SellStockRequest request = new SellStockRequest(accountId, "005930", 1);
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
 
         assertEquals(InvestmentErrorCode.INVALID_ACCOUNT_STATUS, exception.getErrorCode());
-        verify(stockPriceRepository, never()).findCurrentPrice(any(), any());
+        verify(stockPriceRepository, never()).findCurrentPrice(any());
         verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
@@ -293,12 +279,13 @@ class InvestmentServiceTest {
     @DisplayName("현재 시세가 없으면 매도에 실패한다.")
     void sellStockFailWhenStockPriceNotFound() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
-        SellStockRequest request = new SellStockRequest(accountId, StockAssetType.STOCK, "005930", 1);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
+        SellStockRequest request = new SellStockRequest(accountId, "005930", 1);
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930")).thenReturn(Optional.empty());
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.empty());
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
 
@@ -311,14 +298,14 @@ class InvestmentServiceTest {
     @DisplayName("보유 수량이 부족하면 매도에 실패한다.")
     void sellStockFailWhenInsufficientHoldingQuantity() {
         UUID accountId = UUID.randomUUID();
-        InvestmentAccount account = InvestmentAccount.open(UUID.randomUUID(), new BigDecimal("100000.00"));
-        ReflectionTestUtils.setField(account, "investmentAccountId", accountId);
-        account.buy(StockAssetType.STOCK, "005930", 1, new BigDecimal("5000.00"), null);
+        InvestmentAccount account = InvestmentAccount.open(
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+        ReflectionTestUtils.setField(account, "accountId", accountId);
+        account.buy("005930", "삼성전자", 1, 5000L, null);
 
-        SellStockRequest request = new SellStockRequest(accountId, StockAssetType.STOCK, "005930", 2);
+        SellStockRequest request = new SellStockRequest(accountId, "005930", 2);
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice(StockAssetType.STOCK, "005930"))
-                .thenReturn(Optional.of(new BigDecimal("6000.00")));
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(6000L));
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
 
@@ -326,6 +313,8 @@ class InvestmentServiceTest {
         verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
+
+    // ===== FavoriteStock =====
 
     @Test
     @DisplayName("관심 종목 등록 성공 시 아이디를 반환한다.")
@@ -402,16 +391,39 @@ class InvestmentServiceTest {
         UUID userId = UUID.randomUUID();
         FavoriteStock first = FavoriteStock.register(userId, StockAssetType.STOCK, "005930");
         FavoriteStock second = FavoriteStock.register(userId, StockAssetType.ETF, "069500");
+        StockItem firstItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
+        StockItem secondItem = StockItem.create("KODEX 200", "069500", StockAssetType.ETF);
         ReflectionTestUtils.setField(first, "favoriteStockId", UUID.randomUUID());
         ReflectionTestUtils.setField(second, "favoriteStockId", UUID.randomUUID());
 
         when(favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(first, second));
+        when(stockItemRepository.findAllByStockCodeIn(List.of("005930", "069500")))
+                .thenReturn(List.of(firstItem, secondItem));
 
         List<FavoriteStockResponse> result = investmentService.getFavoriteStocks(userId);
 
         assertEquals(2, result.size());
         assertEquals("005930", result.get(0).symbol());
+        assertEquals("삼성전자", result.get(0).stockName());
         assertEquals("069500", result.get(1).symbol());
+        assertEquals("KODEX 200", result.get(1).stockName());
+    }
+
+    @Test
+    @DisplayName("종목 정보가 없으면 관심 종목명은 symbol 값으로 fallback 된다.")
+    void getFavoriteStocksFallbackToSymbolWhenStockNameMissing() {
+        UUID userId = UUID.randomUUID();
+        FavoriteStock favoriteStock = FavoriteStock.register(userId, StockAssetType.STOCK, "MISSING01");
+        ReflectionTestUtils.setField(favoriteStock, "favoriteStockId", UUID.randomUUID());
+
+        when(favoriteStockRepository.findAllByUserIdOrderByCreatedAtDesc(userId)).thenReturn(List.of(favoriteStock));
+        when(stockItemRepository.findAllByStockCodeIn(List.of("MISSING01"))).thenReturn(List.of());
+
+        List<FavoriteStockResponse> result = investmentService.getFavoriteStocks(userId);
+
+        assertEquals(1, result.size());
+        assertEquals("MISSING01", result.get(0).symbol());
+        assertEquals("MISSING01", result.get(0).stockName());
     }
 
     @Test
@@ -497,19 +509,18 @@ class InvestmentServiceTest {
     @Test
     @DisplayName("종목코드 기준 현재가를 조회할 수 있다.")
     void getCurrentStockPriceSuccess() {
-        when(stockPriceRepository.findCurrentPrice(null, "005930"))
-                .thenReturn(Optional.of(new BigDecimal("73500.00")));
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(73500L));
 
         StockPriceResponse response = investmentService.getCurrentStockPrice("005930");
 
         assertEquals("005930", response.stockCode());
-        assertEquals(new BigDecimal("73500.00"), response.currentPrice());
+        assertEquals(73500L, response.currentPrice());
     }
 
     @Test
     @DisplayName("현재가가 없으면 예외가 발생한다.")
     void getCurrentStockPriceFailWhenNotFound() {
-        when(stockPriceRepository.findCurrentPrice(null, "005930")).thenReturn(Optional.empty());
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.empty());
 
         InvestmentException exception = assertThrows(
                 InvestmentException.class,

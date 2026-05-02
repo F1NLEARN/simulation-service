@@ -28,10 +28,10 @@ public class InvestmentHoldingService {
     private final StockItemRepository stockItemRepository;
 
     public List<HoldingResponse> getMyHoldings(UUID userId) {
-        InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
+        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
-        List<Holding> holdings = holdingRepository.findAllByAccountId(account.getInvestmentAccountId());
+        List<Holding> holdings = holdingRepository.findAllWithFilter(account.getAccountId(), null);
 
         return holdings.stream()
                 .map(this::toHoldingResponse)
@@ -39,14 +39,14 @@ public class InvestmentHoldingService {
     }
 
     private HoldingResponse toHoldingResponse(Holding holding) {
-        StockItem stockItem = stockItemRepository.findByStockCode(holding.getInstrumentCode())
+        StockItem stockItem = stockItemRepository.findByStockCode(holding.getInstrumentCode().getValue())
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
         BigDecimal quantity = BigDecimal.valueOf(holding.getQuantity());
         BigDecimal averagePrice = BigDecimal.valueOf(holding.getAverageBuyPrice()).setScale(2, RoundingMode.HALF_UP);
         BigDecimal currentPrice = stockItem.getCurrentPrice() == null
                 ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-                : stockItem.getCurrentPrice().setScale(2, RoundingMode.HALF_UP);
+                : BigDecimal.valueOf(stockItem.getCurrentPrice()).setScale(2, RoundingMode.HALF_UP);
 
         BigDecimal totalPurchaseAmount = averagePrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
         BigDecimal currentEvaluationAmount = currentPrice.multiply(quantity).setScale(2, RoundingMode.HALF_UP);
@@ -62,7 +62,7 @@ public class InvestmentHoldingService {
 
         return new HoldingResponse(
                 holding.getHoldingId(),
-                holding.getInstrumentCode(),
+                holding.getInstrumentCode().getValue(),
                 stockItem.getStockName(),
                 holding.getQuantity(),
                 averagePrice,

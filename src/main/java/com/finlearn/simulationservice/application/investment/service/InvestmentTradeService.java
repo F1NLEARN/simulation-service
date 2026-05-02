@@ -7,9 +7,9 @@ import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountS
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
-import com.finlearn.simulationservice.domain.trade.entity.TradeHistory;
-import com.finlearn.simulationservice.domain.trade.enums.TradeType;
-import com.finlearn.simulationservice.domain.trade.repository.TradeHistoryRepository;
+import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
+import com.finlearn.simulationservice.domain.tradehistory.entity.TradeType;
+import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.UUID;
@@ -36,17 +36,18 @@ public class InvestmentTradeService {
             int page,
             int size
     ) {
-        InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
+        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         String normalizedStockCode = normalizeStockCode(stockCode);
         TradeType parsedTradeType = parseTradeType(tradeType);
 
         Pageable pageable = PageRequest.of(page, size, Sort.by(Sort.Direction.DESC, "tradeAt"));
-        Page<TradeHistory> tradePage = tradeHistoryRepository.findByAccountIdWithFilters(
-                account.getInvestmentAccountId(),
-                normalizedStockCode,
+        Page<TradeHistory> tradePage = tradeHistoryRepository.findAllWithFilters(
+                account.getAccountId(),
                 parsedTradeType,
+                null,
+                normalizedStockCode,
                 pageable
         );
 
@@ -63,7 +64,7 @@ public class InvestmentTradeService {
     private TradeHistoryResponse toResponse(TradeHistory tradeHistory) {
         return new TradeHistoryResponse(
                 tradeHistory.getTradeHistoryId(),
-                tradeHistory.getInstrumentCode(),
+                tradeHistory.getInstrumentCode().getValue(),
                 tradeHistory.getTradeType().name(),
                 tradeHistory.getQuantity(),
                 toMoney(tradeHistory.getTradePrice()),

@@ -2,7 +2,6 @@ package com.finlearn.simulationservice.application.investment.dto.response;
 
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
-import java.math.BigDecimal;
 import java.util.UUID;
 
 public record StockItemResponse(
@@ -10,7 +9,7 @@ public record StockItemResponse(
         String stockCode,
         String name,
         StockAssetType assetType,
-        BigDecimal currentPrice,
+        Long currentPrice,
         boolean tradable
 ) {
     public static StockItemResponse from(StockItem stockItem) {
@@ -20,7 +19,7 @@ public record StockItemResponse(
                 stockItem.getStockName(),
                 stockItem.getAssetType(),
                 stockItem.getCurrentPrice(),
-                stockItem.getCurrentPrice() != null && stockItem.getCurrentPrice().compareTo(BigDecimal.ZERO) > 0
+                stockItem.getCurrentPrice() != null && stockItem.getCurrentPrice() > 0
         );
     }
 }

@@ -10,9 +10,5 @@ public interface InvestmentAccountRepository extends JpaRepository<InvestmentAcc
 
     Optional<InvestmentAccount> findByParticipant_InvestorIdAndParticipant_SeasonId(UUID investorId, UUID seasonId);
 
-    Optional<InvestmentAccount> findBySeasonParticipantId(UUID seasonParticipantId);
-
-    Optional<InvestmentAccount> findByUserIdAndStatus(UUID userId, InvestmentAccountStatus status);
-
-    Optional<InvestmentAccount> findTopByUserIdOrderByCreatedAtDesc(UUID userId);
+    Optional<InvestmentAccount> findByParticipant_InvestorIdAndStatus(UUID investorId, InvestmentAccountStatus status);
 }

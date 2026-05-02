@@ -223,7 +223,7 @@ public class InvestmentService {
     }
 
     public StockItemDetailResponse getStockItemDetail(String stockCode) {
-        String normalizedStockCode = normalizeSymbol(stockCode);
+        String normalizedStockCode = normalizeCode(stockCode);
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
         return StockItemDetailResponse.from(stockItem);

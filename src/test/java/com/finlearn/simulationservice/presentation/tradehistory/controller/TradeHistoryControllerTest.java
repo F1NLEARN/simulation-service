@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
@@ -60,7 +61,7 @@ class TradeHistoryControllerTest {
     @Test
     @DisplayName("거래내역 목록 조회 API는 쿼리 파라미터를 서비스에 올바르게 전달한다.")
     void getTradeHistoryList_requestParamsMappedCorrectly() throws Exception {
-        when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(Page.empty());
+        when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get("/api/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString())
@@ -87,7 +88,7 @@ class TradeHistoryControllerTest {
     @Test
     @DisplayName("정렬 파라미터 미지정 시 기본 정렬(tradeAt DESC)이 적용된다.")
     void getTradeHistoryList_defaultSort_isTradeAtDesc() throws Exception {
-        when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(Page.empty());
+        when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
         mockMvc.perform(get("/api/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
@@ -109,7 +110,7 @@ class TradeHistoryControllerTest {
                 5L, 75_000L, 375_000L, LocalDateTime.of(2026, 4, 29, 10, 0)
         );
         when(tradeHistoryQueryService.getTradeHistoryList(any()))
-                .thenReturn(new PageImpl<>(List.of(response)));
+                .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
 
         mockMvc.perform(get("/api/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString()))

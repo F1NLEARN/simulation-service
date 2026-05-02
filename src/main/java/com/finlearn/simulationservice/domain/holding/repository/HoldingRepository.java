@@ -15,4 +15,6 @@ public interface HoldingRepository {
     Optional<Holding> findByAccountIdAndInstrumentCode(UUID accountId, String instrumentCode);
 
     List<Holding> findAllWithFilter(UUID accountId, String instrumentCode);
+
+    void delete(Holding holding);
 }

@@ -49,7 +49,7 @@ class StockControllerTest {
                 "005930",
                 "삼성전자",
                 StockAssetType.STOCK,
-                new java.math.BigDecimal("73500.00"),
+                73500L,
                 true
         );
         StockItemResponse second = new StockItemResponse(
@@ -57,7 +57,7 @@ class StockControllerTest {
                 "069500",
                 "KODEX 200",
                 StockAssetType.ETF,
-                new java.math.BigDecimal("35000.00"),
+                35000L,
                 true
         );
         when(investmentService.getStockItems(null)).thenReturn(List.of(first, second));
@@ -69,7 +69,7 @@ class StockControllerTest {
                 .andExpect(jsonPath("$.data[0].name").value("삼성전자"))
                 .andExpect(jsonPath("$.data[0].stockCode").value("005930"))
                 .andExpect(jsonPath("$.data[0].assetType").value("STOCK"))
-                .andExpect(jsonPath("$.data[0].currentPrice").value(73500.00))
+                .andExpect(jsonPath("$.data[0].currentPrice").value(73500))
                 .andExpect(jsonPath("$.data[0].tradable").value(true))
                 .andExpect(jsonPath("$.data[1].assetType").value("ETF"));
     }
@@ -94,7 +94,7 @@ class StockControllerTest {
                 "005930",
                 "삼성전자",
                 StockAssetType.STOCK,
-                new java.math.BigDecimal("73500.00"),
+                73500L,
                 true
         );
         when(investmentService.getStockItemDetail("005930")).thenReturn(response);
@@ -105,7 +105,7 @@ class StockControllerTest {
                 .andExpect(jsonPath("$.message").value("종목 상세 조회 성공"))
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
                 .andExpect(jsonPath("$.data.name").value("삼성전자"))
-                .andExpect(jsonPath("$.data.currentPrice").value(73500.00))
+                .andExpect(jsonPath("$.data.currentPrice").value(73500))
                 .andExpect(jsonPath("$.data.tradable").value(true));
     }
 
@@ -125,14 +125,14 @@ class StockControllerTest {
     @DisplayName("현재가 조회 API는 종목코드 기준 현재가를 반환한다.")
     void getCurrentStockPrice() throws Exception {
         when(investmentService.getCurrentStockPrice("005930"))
-                .thenReturn(new StockPriceResponse("005930", new java.math.BigDecimal("73500.00")));
+                .thenReturn(new StockPriceResponse("005930", 73500L));
 
         mockMvc.perform(get("/api/investments/stocks/005930/price"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("현재가 조회 성공"))
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
-                .andExpect(jsonPath("$.data.currentPrice").value(73500.00));
+                .andExpect(jsonPath("$.data.currentPrice").value(73500));
     }
 
     @Test

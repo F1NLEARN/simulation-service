@@ -8,7 +8,6 @@ import java.util.UUID;
 public record StockItemResponse(
         UUID id,
         String stockCode,
-        String symbol,
         String name,
         StockAssetType assetType,
         BigDecimal currentPrice,
@@ -17,7 +16,6 @@ public record StockItemResponse(
     public static StockItemResponse from(StockItem stockItem) {
         return new StockItemResponse(
                 stockItem.getStockItemId(),
-                stockItem.getStockCode(),
                 stockItem.getStockCode(),
                 stockItem.getStockName(),
                 stockItem.getAssetType(),

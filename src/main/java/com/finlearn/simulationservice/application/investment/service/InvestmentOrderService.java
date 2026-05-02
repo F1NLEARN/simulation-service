@@ -47,10 +47,6 @@ public class InvestmentOrderService {
         InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
-        if (account.getStatus() != InvestmentAccountStatus.ACTIVE) {
-            throw new InvestmentException(InvestmentErrorCode.INVALID_ACCOUNT_STATUS);
-        }
-
         String normalizedStockCode = normalizeStockCode(request.stockCode());
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
@@ -60,15 +56,15 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE);
         }
 
-        BigDecimal totalAmount = currentPrice.multiply(BigDecimal.valueOf(request.quantity()));
-        if (account.getCashBalance().compareTo(totalAmount) < 0) {
+        long currentPriceAsLong = toLongAmount(currentPrice);
+        long totalAmount = currentPriceAsLong * request.quantity();
+        if (toLongAmount(account.getCashBalance()) < totalAmount) {
             throw new InvestmentException(InvestmentErrorCode.INSUFFICIENT_CASH);
         }
 
         account.buy(stockItem.getAssetType(), normalizedStockCode, request.quantity(), currentPrice, LocalDateTime.now());
         investmentAccountRepository.save(account);
 
-        long currentPriceAsLong = toLongAmount(currentPrice);
         Holding holding = holdingRepository.findByAccountIdAndInstrumentCode(account.getInvestmentAccountId(), normalizedStockCode)
                 .map(existing -> {
                     existing.updateCurrentPrice(currentPriceAsLong);
@@ -87,6 +83,7 @@ public class InvestmentOrderService {
                 )));
         holdingRepository.save(holding);
 
+        long cashBalanceAfterTrade = toLongAmount(account.getCashBalance());
         TradeHistory tradeHistory = TradeHistory.buy(
                 account.getInvestmentAccountId(),
                 MVP_DEFAULT_SEASON_ID,
@@ -95,7 +92,7 @@ public class InvestmentOrderService {
                 request.quantity(),
                 currentPriceAsLong,
                 LocalDateTime.now(),
-                toLongAmount(account.getCashBalance())
+                cashBalanceAfterTrade
         );
         tradeHistoryRepository.save(tradeHistory);
 
@@ -105,9 +102,9 @@ public class InvestmentOrderService {
                 stockItem.getStockName(),
                 "BUY",
                 request.quantity(),
-                currentPrice,
+                currentPriceAsLong,
                 totalAmount,
-                account.getCashBalance()
+                cashBalanceAfterTrade
         );
     }
 
@@ -119,10 +116,6 @@ public class InvestmentOrderService {
 
         InvestmentAccount account = investmentAccountRepository.findByUserIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
-
-        if (account.getStatus() != InvestmentAccountStatus.ACTIVE) {
-            throw new InvestmentException(InvestmentErrorCode.INVALID_ACCOUNT_STATUS);
-        }
 
         String normalizedStockCode = normalizeStockCode(request.stockCode());
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
@@ -140,11 +133,11 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY);
         }
 
-        BigDecimal totalSellAmount = currentPrice.multiply(BigDecimal.valueOf(request.quantity()));
-        account.addCashBalance(totalSellAmount);
+        long currentPriceAsLong = toLongAmount(currentPrice);
+        long totalSellAmount = currentPriceAsLong * request.quantity();
+        account.addCashBalance(currentPrice.multiply(BigDecimal.valueOf(request.quantity())));
         investmentAccountRepository.save(account);
 
-        long currentPriceAsLong = toLongAmount(currentPrice);
         holding.updateCurrentPrice(currentPriceAsLong);
         holding.sell(request.quantity());
 
@@ -155,6 +148,7 @@ public class InvestmentOrderService {
             holdingRepository.save(holding);
         }
 
+        long cashBalanceAfterTrade = toLongAmount(account.getCashBalance());
         TradeHistory tradeHistory = TradeHistory.sell(
                 account.getInvestmentAccountId(),
                 MVP_DEFAULT_SEASON_ID,
@@ -163,7 +157,7 @@ public class InvestmentOrderService {
                 request.quantity(),
                 currentPriceAsLong,
                 LocalDateTime.now(),
-                toLongAmount(account.getCashBalance())
+                cashBalanceAfterTrade
         );
         tradeHistoryRepository.save(tradeHistory);
 
@@ -171,10 +165,10 @@ public class InvestmentOrderService {
                 normalizedStockCode,
                 stockItem.getStockName(),
                 request.quantity(),
-                currentPrice,
+                currentPriceAsLong,
                 totalSellAmount,
                 remainingQuantity,
-                account.getCashBalance()
+                cashBalanceAfterTrade
         );
     }
 

@@ -47,7 +47,6 @@ class StockControllerTest {
         StockItemResponse first = new StockItemResponse(
                 UUID.randomUUID(),
                 "005930",
-                "005930",
                 "삼성전자",
                 StockAssetType.STOCK,
                 new java.math.BigDecimal("73500.00"),
@@ -55,7 +54,6 @@ class StockControllerTest {
         );
         StockItemResponse second = new StockItemResponse(
                 UUID.randomUUID(),
-                "069500",
                 "069500",
                 "KODEX 200",
                 StockAssetType.ETF,
@@ -70,7 +68,6 @@ class StockControllerTest {
                 .andExpect(jsonPath("$.message").value("종목 목록 조회 성공"))
                 .andExpect(jsonPath("$.data[0].name").value("삼성전자"))
                 .andExpect(jsonPath("$.data[0].stockCode").value("005930"))
-                .andExpect(jsonPath("$.data[0].symbol").value("005930"))
                 .andExpect(jsonPath("$.data[0].assetType").value("STOCK"))
                 .andExpect(jsonPath("$.data[0].currentPrice").value(73500.00))
                 .andExpect(jsonPath("$.data[0].tradable").value(true))
@@ -94,7 +91,6 @@ class StockControllerTest {
     void getStockItemDetail() throws Exception {
         StockItemDetailResponse response = new StockItemDetailResponse(
                 UUID.randomUUID(),
-                "005930",
                 "005930",
                 "삼성전자",
                 StockAssetType.STOCK,

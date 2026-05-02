@@ -1,0 +1,16 @@
+package com.finlearn.simulationservice.domain.investment.event;
+
+import java.time.LocalDateTime;
+import java.util.UUID;
+
+public record StockSoldEvent(
+        UUID accountId,
+        UUID investorId,
+        UUID seasonId,
+        String instrumentCode,
+        long quantity,
+        long tradePrice,
+        long totalTradeAmount,
+        LocalDateTime tradeAt
+) {
+}

@@ -1,6 +1,6 @@
 package com.finlearn.simulationservice.domain.investment.enums;
 
-public enum StockAssetType {
-    STOCK,
-    ETF
+public enum StockTransactionType {
+    BUY,
+    SELL
 }

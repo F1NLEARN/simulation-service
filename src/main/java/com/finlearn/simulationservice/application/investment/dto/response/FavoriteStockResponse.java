@@ -7,13 +7,15 @@ import java.util.UUID;
 public record FavoriteStockResponse(
         UUID favoriteStockId,
         StockAssetType assetType,
-        String symbol
+        String symbol,
+        String stockName
 ) {
-    public static FavoriteStockResponse from(FavoriteStock favoriteStock) {
+    public static FavoriteStockResponse from(FavoriteStock favoriteStock, String stockName) {
         return new FavoriteStockResponse(
                 favoriteStock.getFavoriteStockId(),
                 favoriteStock.getAssetType(),
-                favoriteStock.getSymbol()
+                favoriteStock.getSymbol(),
+                stockName
         );
     }
 }

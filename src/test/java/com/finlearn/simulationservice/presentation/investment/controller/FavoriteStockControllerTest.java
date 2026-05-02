@@ -72,8 +72,8 @@ class FavoriteStockControllerTest {
     @DisplayName("관심 종목 조회 API는 유저 기준 목록을 반환한다.")
     void getFavoriteStocks() throws Exception {
         UUID userId = UUID.randomUUID();
-        FavoriteStockResponse first = new FavoriteStockResponse(UUID.randomUUID(), StockAssetType.STOCK, "005930");
-        FavoriteStockResponse second = new FavoriteStockResponse(UUID.randomUUID(), StockAssetType.ETF, "069500");
+        FavoriteStockResponse first = new FavoriteStockResponse(UUID.randomUUID(), StockAssetType.STOCK, "005930", "삼성전자");
+        FavoriteStockResponse second = new FavoriteStockResponse(UUID.randomUUID(), StockAssetType.ETF, "069500", "KODEX 200");
 
         when(investmentService.getFavoriteStocks(userId)).thenReturn(List.of(first, second));
 
@@ -84,6 +84,7 @@ class FavoriteStockControllerTest {
                 .andExpect(jsonPath("$.message").value("관심 종목 조회 성공"))
                 .andExpect(jsonPath("$.data.length()").value(2))
                 .andExpect(jsonPath("$.data[0].symbol").value("005930"))
+                .andExpect(jsonPath("$.data[0].stockName").value("삼성전자"))
                 .andExpect(jsonPath("$.data[1].symbol").value("069500"));
     }
 

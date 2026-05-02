@@ -11,7 +11,6 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
-import java.math.BigDecimal;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -43,11 +42,11 @@ public class StockItem extends BaseEntity {
     @Column(nullable = false, length = 10)
     private StockAssetType assetType;
 
-    @Column(name = "current_price", precision = 19, scale = 2)
-    private BigDecimal currentPrice;
+    @Column(name = "current_price")
+    private Long currentPrice;
 
     @Builder
-    private StockItem(String stockName, String stockCode, StockAssetType assetType, BigDecimal currentPrice) {
+    private StockItem(String stockName, String stockCode, StockAssetType assetType, Long currentPrice) {
         this.stockName = stockName;
         this.stockCode = stockCode;
         this.assetType = assetType;
@@ -58,7 +57,7 @@ public class StockItem extends BaseEntity {
         return create(stockName, stockCode, assetType, null);
     }
 
-    public static StockItem create(String stockName, String stockCode, StockAssetType assetType, BigDecimal currentPrice) {
+    public static StockItem create(String stockName, String stockCode, StockAssetType assetType, Long currentPrice) {
         return StockItem.builder()
                 .stockName(stockName)
                 .stockCode(stockCode)

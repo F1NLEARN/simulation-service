@@ -4,7 +4,6 @@ import com.finlearn.simulationservice.application.investment.dto.request.BuyStoc
 import com.finlearn.simulationservice.application.investment.dto.request.RegisterFavoriteStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.request.SellStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.response.FavoriteStockResponse;
-import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
@@ -214,19 +213,12 @@ public class InvestmentService {
     public List<StockItemResponse> getStockItems(String assetType) {
         StockAssetType filter = parseAssetType(assetType);
         List<StockItem> stockItems = filter == null
-                ? stockItemRepository.findAllByCurrentPriceIsNotNullOrderByStockCodeAsc()
-                : stockItemRepository.findAllByAssetTypeAndCurrentPriceIsNotNullOrderByStockCodeAsc(filter);
+                ? stockItemRepository.findAllByOrderByStockCodeAsc()
+                : stockItemRepository.findAllByAssetTypeOrderByStockCodeAsc(filter);
 
         return stockItems.stream()
                 .map(StockItemResponse::from)
                 .toList();
-    }
-
-    public StockItemDetailResponse getStockItemDetail(String stockCode) {
-        String normalizedStockCode = normalizeSymbol(stockCode);
-        StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
-                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
-        return StockItemDetailResponse.from(stockItem);
     }
 
     public StockPriceResponse getCurrentStockPrice(String stockCode) {

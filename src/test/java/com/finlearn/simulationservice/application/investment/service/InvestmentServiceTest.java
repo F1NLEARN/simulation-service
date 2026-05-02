@@ -471,12 +471,12 @@ class InvestmentServiceTest {
     void getStockItemsWithoutAssetType() {
         StockItem first = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
         StockItem second = StockItem.create("KODEX 200", "069500", StockAssetType.ETF);
-        when(stockItemRepository.findAllByOrderByStockCodeAsc()).thenReturn(List.of(first, second));
+        when(stockItemRepository.findAllByCurrentPriceIsNotNullOrderByStockCodeAsc()).thenReturn(List.of(first, second));
 
         List<StockItemResponse> result = investmentService.getStockItems(null);
 
         assertEquals(2, result.size());
-        assertEquals("삼성전자", result.get(0).stockName());
+        assertEquals("삼성전자", result.get(0).name());
         assertEquals("005930", result.get(0).stockCode());
         assertEquals(StockAssetType.ETF, result.get(1).assetType());
     }
@@ -485,7 +485,7 @@ class InvestmentServiceTest {
     @DisplayName("자산유형 필터가 있으면 해당 유형 종목만 조회한다.")
     void getStockItemsWithAssetType() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
-        when(stockItemRepository.findAllByAssetTypeOrderByStockCodeAsc(StockAssetType.STOCK))
+        when(stockItemRepository.findAllByAssetTypeAndCurrentPriceIsNotNullOrderByStockCodeAsc(StockAssetType.STOCK))
                 .thenReturn(List.of(stockItem));
 
         List<StockItemResponse> result = investmentService.getStockItems("stock");

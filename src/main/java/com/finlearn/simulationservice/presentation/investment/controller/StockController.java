@@ -1,6 +1,7 @@
 package com.finlearn.simulationservice.presentation.investment.controller;
 
 import com.finlearn.common.response.CommonResponse;
+import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
 import com.finlearn.simulationservice.application.investment.service.InvestmentService;
@@ -24,6 +25,11 @@ public class StockController {
             @RequestParam(required = false) String assetType
     ) {
         return CommonResponse.success("종목 목록 조회 성공", investmentService.getStockItems(assetType));
+    }
+
+    @GetMapping("/{stockCode}")
+    public CommonResponse<StockItemDetailResponse> getStockItemDetail(@PathVariable String stockCode) {
+        return CommonResponse.success("종목 상세 조회 성공", investmentService.getStockItemDetail(stockCode));
     }
 
     @GetMapping("/{stockCode}/price")

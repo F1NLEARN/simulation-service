@@ -14,12 +14,7 @@ public enum InvestmentErrorCode {
     STOCK_PRICE_NOT_FOUND(HttpStatus.NOT_FOUND, "INVEST_009", "현재 시세를 찾을 수 없습니다."),
     FAVORITE_STOCK_ALREADY_EXISTS(HttpStatus.CONFLICT, "INVEST_010", "이미 등록된 관심 종목입니다."),
     FAVORITE_STOCK_NOT_FOUND(HttpStatus.NOT_FOUND, "INVEST_011", "삭제할 관심 종목이 없습니다."),
-    INVALID_ASSET_TYPE(HttpStatus.BAD_REQUEST, "INVEST_012", "지원하지 않는 자산 유형입니다."),
-    ACTIVE_INVESTMENT_ACCOUNT_ALREADY_EXISTS(HttpStatus.CONFLICT, "INVEST_013", "이미 ACTIVE 투자계좌가 존재합니다."),
-    STOCK_ITEM_NOT_FOUND(HttpStatus.NOT_FOUND, "INVEST_014", "종목을 찾을 수 없습니다."),
-    STOCK_NOT_TRADABLE(HttpStatus.CONFLICT, "INVEST_015", "거래 가능한 종목이 아니거나 현재가가 없습니다."),
-    INVALID_TRADE_TYPE(HttpStatus.BAD_REQUEST, "INVEST_016", "거래 유형은 BUY 또는 SELL 이어야 합니다."),
-    INVALID_USER_ID(HttpStatus.BAD_REQUEST, "INVEST_017", "X-User-Id는 유효한 UUID 형식이어야 합니다.");
+    INVALID_ASSET_TYPE(HttpStatus.BAD_REQUEST, "INVEST_012", "지원하지 않는 자산 유형입니다.");
 
     private final HttpStatus httpStatus;
     private final String code;

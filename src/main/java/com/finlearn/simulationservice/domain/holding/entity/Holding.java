@@ -95,9 +95,7 @@ public class Holding extends BaseEntity {
         }
         this.totalBuyAmount += buyQuantity * buyPrice;
         this.quantity += buyQuantity;
-        this.averageBuyPrice = BigDecimal.valueOf(this.totalBuyAmount)
-                .divide(BigDecimal.valueOf(this.quantity), 0, RoundingMode.HALF_UP)
-                .longValue();
+        this.averageBuyPrice = Math.round((double) this.totalBuyAmount / this.quantity);
         recalculateDerived();
     }
 

@@ -1,7 +1,6 @@
 package com.finlearn.simulationservice.presentation.investment.controller;
 
 import com.finlearn.common.exception.GlobalExceptionAdviceImpl;
-import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
 import com.finlearn.simulationservice.application.investment.service.InvestmentService;
@@ -9,7 +8,6 @@ import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import java.util.List;
-import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -44,33 +42,17 @@ class StockControllerTest {
     @Test
     @DisplayName("종목 목록 조회 API는 종목명/종목코드/자산유형을 반환한다.")
     void getStockItems() throws Exception {
-        StockItemResponse first = new StockItemResponse(
-                UUID.randomUUID(),
-                "005930",
-                "삼성전자",
-                StockAssetType.STOCK,
-                new java.math.BigDecimal("73500.00"),
-                true
-        );
-        StockItemResponse second = new StockItemResponse(
-                UUID.randomUUID(),
-                "069500",
-                "KODEX 200",
-                StockAssetType.ETF,
-                new java.math.BigDecimal("35000.00"),
-                true
-        );
+        StockItemResponse first = new StockItemResponse("삼성전자", "005930", StockAssetType.STOCK);
+        StockItemResponse second = new StockItemResponse("KODEX 200", "069500", StockAssetType.ETF);
         when(investmentService.getStockItems(null)).thenReturn(List.of(first, second));
 
         mockMvc.perform(get("/api/investments/stocks"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("종목 목록 조회 성공"))
-                .andExpect(jsonPath("$.data[0].name").value("삼성전자"))
+                .andExpect(jsonPath("$.data[0].stockName").value("삼성전자"))
                 .andExpect(jsonPath("$.data[0].stockCode").value("005930"))
                 .andExpect(jsonPath("$.data[0].assetType").value("STOCK"))
-                .andExpect(jsonPath("$.data[0].currentPrice").value(73500.00))
-                .andExpect(jsonPath("$.data[0].tradable").value(true))
                 .andExpect(jsonPath("$.data[1].assetType").value("ETF"));
     }
 
@@ -84,41 +66,6 @@ class StockControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("지원하지 않는 자산 유형입니다."));
-    }
-
-    @Test
-    @DisplayName("종목 상세 조회 API는 매수/매도에 사용할 현재가 정보를 포함한다.")
-    void getStockItemDetail() throws Exception {
-        StockItemDetailResponse response = new StockItemDetailResponse(
-                UUID.randomUUID(),
-                "005930",
-                "삼성전자",
-                StockAssetType.STOCK,
-                new java.math.BigDecimal("73500.00"),
-                true
-        );
-        when(investmentService.getStockItemDetail("005930")).thenReturn(response);
-
-        mockMvc.perform(get("/api/investments/stocks/005930"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.success").value(true))
-                .andExpect(jsonPath("$.message").value("종목 상세 조회 성공"))
-                .andExpect(jsonPath("$.data.stockCode").value("005930"))
-                .andExpect(jsonPath("$.data.name").value("삼성전자"))
-                .andExpect(jsonPath("$.data.currentPrice").value(73500.00))
-                .andExpect(jsonPath("$.data.tradable").value(true));
-    }
-
-    @Test
-    @DisplayName("없는 종목 코드로 상세 조회 시 공통 예외 포맷으로 반환한다.")
-    void getStockItemDetailFailWhenNotFound() throws Exception {
-        doThrow(new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND))
-                .when(investmentService).getStockItemDetail("999999");
-
-        mockMvc.perform(get("/api/investments/stocks/999999"))
-                .andExpect(status().isNotFound())
-                .andExpect(jsonPath("$.status").value(404))
-                .andExpect(jsonPath("$.message").value("종목을 찾을 수 없습니다."));
     }
 
     @Test

@@ -14,5 +14,9 @@ public interface AiAnalysisRepository {
 
     List<AiAnalysis> findAllByAccountId(UUID accountId);
 
+    List<AiAnalysis> findAllByAccountIdOrderByAnalyzedAtDesc(UUID accountId);
+
+    Optional<AiAnalysis> findTopByAccountIdOrderByAnalyzedAtDesc(UUID accountId);
+
     List<AiAnalysis> findAllByAccountIdAndSeasonId(UUID accountId, UUID seasonId);
 }

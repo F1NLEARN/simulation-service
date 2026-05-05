@@ -23,7 +23,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/trade-histories")
+@RequestMapping("/api/v1/trade-histories")
 public class TradeHistoryController {
 
     private final TradeHistoryQueryService tradeHistoryQueryService;

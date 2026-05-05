@@ -16,7 +16,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/ai-analyses")
+@RequestMapping("/api/v1/ai-analyses")
 public class AiAnalysisController {
 
     private final AiAnalysisQueryService aiAnalysisQueryService;

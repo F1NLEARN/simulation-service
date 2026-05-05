@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/investments/favorites")
+@RequestMapping("/api/v1/investments/favorites")
 public class FavoriteStockController {
 
     private final InvestmentService investmentService;

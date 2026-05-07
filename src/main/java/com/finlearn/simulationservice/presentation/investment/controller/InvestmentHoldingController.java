@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/investments/holdings")
+@RequestMapping("/api/v1/investments/holdings")
 public class InvestmentHoldingController {
 
     private final InvestmentHoldingService investmentHoldingService;

@@ -17,7 +17,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/investments/orders")
+@RequestMapping("/api/v1/investments/orders")
 public class InvestmentOrderController {
 
     private final InvestmentOrderService investmentOrderService;

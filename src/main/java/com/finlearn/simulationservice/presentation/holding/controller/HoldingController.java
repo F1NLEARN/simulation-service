@@ -18,7 +18,7 @@ import java.util.UUID;
 
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/holdings")
+@RequestMapping("/api/v1/holdings")
 public class HoldingController {
 
     private final HoldingQueryService holdingQueryService;

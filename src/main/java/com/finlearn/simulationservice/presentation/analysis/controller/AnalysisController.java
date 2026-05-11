@@ -20,6 +20,7 @@ public class AnalysisController {
 
     private final PortfolioAnalysisQueryService portfolioAnalysisQueryService;
 
+    // CI/CD 테스트 주석
     @GetMapping("/portfolio")
     public CommonResponse<PortfolioAnalysisResponse> getPortfolioAnalysis(
             @RequestHeader("X-User-Id") String userIdHeader

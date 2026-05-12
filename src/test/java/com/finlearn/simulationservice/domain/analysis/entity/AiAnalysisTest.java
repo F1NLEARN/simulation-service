@@ -2,6 +2,7 @@ package com.finlearn.simulationservice.domain.analysis.entity;
 
 import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
 import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisType;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisDomainException;
 import com.finlearn.simulationservice.domain.analysis.exception.AiAnalysisErrorCode;
 import org.junit.jupiter.api.DisplayName;
@@ -23,7 +24,9 @@ class AiAnalysisTest {
     private static final int SEASON_NUMBER = 1;
     private static final BigDecimal RISK_SCORE = new BigDecimal("65.50");
     private static final BigDecimal PORTFOLIO_CONCENTRATION_SCORE = new BigDecimal("80.00");
+    private static final AnalysisType ANALYSIS_TYPE = AnalysisType.PORTFOLIO;
     private static final String RECOMMENDED_LEARNING_TOPIC = "ETF 분산 투자 전략";
+    private static final String SUMMARY = "단일 종목 집중도가 높습니다.";
     private static final String AI_FEEDBACK_MESSAGE = "포트폴리오가 기술주에 편중되어 있습니다. 분산 투자를 권장합니다.";
     private static final LocalDateTime PERIOD_START = LocalDateTime.of(2026, 4, 1, 0, 0);
     private static final LocalDateTime PERIOD_END = LocalDateTime.of(2026, 4, 30, 23, 59);
@@ -33,9 +36,11 @@ class AiAnalysisTest {
         return new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
     }
 
@@ -53,13 +58,18 @@ class AiAnalysisTest {
         assertThat(aiAnalysis.getTargetUserName()).isEqualTo(TARGET_USER_NAME);
         assertThat(aiAnalysis.getSeasonId()).isEqualTo(SEASON_ID);
         assertThat(aiAnalysis.getSeasonNumber()).isEqualTo(SEASON_NUMBER);
+        assertThat(aiAnalysis.getAnalysisType()).isEqualTo(ANALYSIS_TYPE);
         assertThat(aiAnalysis.getRiskScore().getValue()).isEqualByComparingTo(RISK_SCORE);
         assertThat(aiAnalysis.getPortfolioConcentrationScore().getValue()).isEqualByComparingTo(PORTFOLIO_CONCENTRATION_SCORE);
         assertThat(aiAnalysis.getRecommendedLearningTopic()).isEqualTo(RECOMMENDED_LEARNING_TOPIC);
+        assertThat(aiAnalysis.getSummary()).isEqualTo(SUMMARY);
         assertThat(aiAnalysis.getAiFeedbackMessage()).isEqualTo(AI_FEEDBACK_MESSAGE);
         assertThat(aiAnalysis.getAnalysisPeriodStartAt()).isEqualTo(PERIOD_START);
         assertThat(aiAnalysis.getAnalysisPeriodEndAt()).isEqualTo(PERIOD_END);
         assertThat(aiAnalysis.getAnalyzedAt()).isEqualTo(ANALYZED_AT);
+        assertThat(aiAnalysis.getFailureReason()).isNull();
+        assertThat(aiAnalysis.getPrompt()).isNull();
+        assertThat(aiAnalysis.getModelResponse()).isNull();
         assertThat(aiAnalysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.READY);
     }
 
@@ -69,9 +79,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 null, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -85,9 +97,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, null, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -101,9 +115,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 null, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -117,9 +133,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                "  ", AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                "  ", SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -133,9 +151,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, "  ",
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, "  ",
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -149,9 +169,11 @@ class AiAnalysisTest {
         CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_END, PERIOD_START, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_END, PERIOD_START, ANALYZED_AT,
+                null, null
         );
 
         assertThatThrownBy(() -> AiAnalysis.create(command))
@@ -219,12 +241,83 @@ class AiAnalysisTest {
         AiAnalysis second = AiAnalysis.create(new CreateAiAnalysisCommand(
                 ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
                 SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
                 new BigDecimal("30.00"), new BigDecimal("45.00"),
-                RECOMMENDED_LEARNING_TOPIC, AI_FEEDBACK_MESSAGE,
-                PERIOD_START, PERIOD_END, ANALYZED_AT
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
         ));
 
         assertThat(first.getAccountId()).isEqualTo(second.getAccountId());
         assertThat(first.getRiskScore().getValue()).isNotEqualByComparingTo(second.getRiskScore().getValue());
+    }
+
+    @Test
+    @DisplayName("analysisType이 null이면 INVALID_ANALYSIS_TYPE 코드로 예외가 발생한다.")
+    void create_withNullAnalysisType_throwsException() {
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
+                ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
+                SEASON_ID, SEASON_NUMBER,
+                null,
+                RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_ANALYSIS_TYPE.getMessage());
+    }
+
+    @Test
+    @DisplayName("summary가 blank이면 INVALID_SUMMARY 코드로 예외가 발생한다.")
+    void create_withBlankSummary_throwsException() {
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
+                ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
+                SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
+                RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
+                RECOMMENDED_LEARNING_TOPIC, "  ", AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                null, null
+        );
+
+        assertThatThrownBy(() -> AiAnalysis.create(command))
+                .isInstanceOf(AiAnalysisDomainException.class)
+                .hasMessage(AiAnalysisErrorCode.INVALID_SUMMARY.getMessage());
+    }
+
+    @Test
+    @DisplayName("fail(reason) 호출 시 상태가 FAILED로 변경되고 failureReason이 저장된다.")
+    void fail_withReason_savesFailureReason() {
+        AiAnalysis aiAnalysis = createDefault();
+        String reason = "AI 응답 파싱 실패";
+
+        aiAnalysis.fail(reason);
+
+        assertThat(aiAnalysis.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
+        assertThat(aiAnalysis.getFailureReason()).isEqualTo(reason);
+    }
+
+    @Test
+    @DisplayName("prompt와 modelResponse를 포함해 생성하면 해당 값이 저장된다.")
+    void create_withPromptAndModelResponse_savesDebugFields() {
+        String prompt = "포트폴리오 분석 요청 프롬프트";
+        String modelResponse = "{\"result\": \"분석 완료\"}";
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
+                ACCOUNT_ID, TARGET_USER_ID, TARGET_USER_NAME,
+                SEASON_ID, SEASON_NUMBER,
+                ANALYSIS_TYPE,
+                RISK_SCORE, PORTFOLIO_CONCENTRATION_SCORE,
+                RECOMMENDED_LEARNING_TOPIC, SUMMARY, AI_FEEDBACK_MESSAGE,
+                PERIOD_START, PERIOD_END, ANALYZED_AT,
+                prompt, modelResponse
+        );
+
+        AiAnalysis aiAnalysis = AiAnalysis.create(command);
+
+        assertThat(aiAnalysis.getPrompt()).isEqualTo(prompt);
+        assertThat(aiAnalysis.getModelResponse()).isEqualTo(modelResponse);
     }
 }

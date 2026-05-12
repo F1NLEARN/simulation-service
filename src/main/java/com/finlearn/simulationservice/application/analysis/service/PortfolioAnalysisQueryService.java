@@ -16,6 +16,8 @@ import com.finlearn.simulationservice.domain.investment.exception.InvestmentExce
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -23,6 +25,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +38,7 @@ public class PortfolioAnalysisQueryService {
     private final StockItemRepository stockItemRepository;
     private final PortfolioAnalysisDomainService portfolioAnalysisDomainService;
 
+    @Cacheable(value = "portfolioAnalysis", key = "#query.investorId")
     public PortfolioAnalysisResponse getPortfolioAnalysis(GetPortfolioAnalysisQuery query) {
         InvestmentAccount account = investmentAccountRepository
                 .findByParticipant_InvestorIdAndStatus(query.investorId(), InvestmentAccountStatus.ACTIVE)
@@ -49,6 +53,10 @@ public class PortfolioAnalysisQueryService {
                 allocation.cashWeight(), account.getTotalReturnRate());
 
         return PortfolioAnalysisResponse.of(account, holdings, allocation, diagnosis);
+    }
+
+    @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
+    public void evictCache(UUID investorId) {
     }
 
     private PortfolioAllocationResponse buildAllocation(InvestmentAccount account, List<Holding> holdings) {

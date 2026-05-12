@@ -86,16 +86,16 @@ class PortfolioAnalysisQueryServiceTest {
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
 
         assertThat(result.accountId()).isEqualTo(ACCOUNT_ID);
-        assertThat(result.totalBuyAmount()).isZero();
-        assertThat(result.totalValuationAmount()).isZero();
-        assertThat(result.totalProfitLoss()).isZero();
-        assertThat(result.totalReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.portfolioSummary().totalBuyAmount()).isZero();
+        assertThat(result.portfolioSummary().totalValuationAmount()).isZero();
+        assertThat(result.portfolioSummary().totalProfitLoss()).isZero();
+        assertThat(result.portfolioSummary().totalReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(result.holdings()).isEmpty();
-        assertThat(result.cashBalance()).isEqualTo(10_000_000L);
-        assertThat(result.totalAssetAmount()).isEqualTo(10_000_000L);
-        assertThat(result.holdingCount()).isZero();
-        assertThat(result.topHoldingWeight()).isEqualByComparingTo(BigDecimal.ZERO);
-        assertThat(result.cashWeight()).isEqualByComparingTo(new BigDecimal("100.00"));
+        assertThat(result.portfolioSummary().cashBalance()).isEqualTo(10_000_000L);
+        assertThat(result.portfolioSummary().totalAssetAmount()).isEqualTo(10_000_000L);
+        assertThat(result.allocation().holdingCount()).isZero();
+        assertThat(result.allocation().topHoldingWeight()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.allocation().cashWeight()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
 
     @Test
@@ -115,10 +115,10 @@ class PortfolioAnalysisQueryServiceTest {
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
 
-        assertThat(result.totalBuyAmount()).isEqualTo(750_000L);
-        assertThat(result.totalValuationAmount()).isEqualTo(800_000L);
-        assertThat(result.totalProfitLoss()).isEqualTo(50_000L);
-        assertThat(result.totalReturnRate()).isEqualByComparingTo(new BigDecimal("6.67"));
+        assertThat(result.portfolioSummary().totalBuyAmount()).isEqualTo(750_000L);
+        assertThat(result.portfolioSummary().totalValuationAmount()).isEqualTo(800_000L);
+        assertThat(result.portfolioSummary().totalProfitLoss()).isEqualTo(50_000L);
+        assertThat(result.portfolioSummary().totalReturnRate()).isEqualByComparingTo(new BigDecimal("6.67"));
         assertThat(result.holdings()).hasSize(1);
         assertThat(result.holdings().get(0).weight()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
@@ -141,10 +141,10 @@ class PortfolioAnalysisQueryServiceTest {
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
 
-        assertThat(result.totalBuyAmount()).isEqualTo(200_000L);
-        assertThat(result.totalValuationAmount()).isEqualTo(210_000L);
-        assertThat(result.totalProfitLoss()).isEqualTo(10_000L);
-        assertThat(result.totalReturnRate()).isEqualByComparingTo(new BigDecimal("5.00"));
+        assertThat(result.portfolioSummary().totalBuyAmount()).isEqualTo(200_000L);
+        assertThat(result.portfolioSummary().totalValuationAmount()).isEqualTo(210_000L);
+        assertThat(result.portfolioSummary().totalProfitLoss()).isEqualTo(10_000L);
+        assertThat(result.portfolioSummary().totalReturnRate()).isEqualByComparingTo(new BigDecimal("5.00"));
         assertThat(result.holdings()).hasSize(2);
     }
 
@@ -171,8 +171,8 @@ class PortfolioAnalysisQueryServiceTest {
                 .map(h -> h.weight())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalWeight).isEqualByComparingTo(new BigDecimal("100.00"));
-        assertThat(result.holdingCount()).isEqualTo(2);
-        assertThat(result.topHoldingWeight()).isEqualByComparingTo(new BigDecimal("75.00"));
+        assertThat(result.allocation().holdingCount()).isEqualTo(2);
+        assertThat(result.allocation().topHoldingWeight()).isEqualByComparingTo(new BigDecimal("75.00"));
     }
 
     @Test
@@ -190,10 +190,10 @@ class PortfolioAnalysisQueryServiceTest {
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
 
-        assertThat(result.totalBuyAmount()).isEqualTo(1_000_000L);
-        assertThat(result.totalValuationAmount()).isEqualTo(900_000L);
-        assertThat(result.totalProfitLoss()).isEqualTo(-100_000L);
-        assertThat(result.totalReturnRate()).isEqualByComparingTo(new BigDecimal("-10.00"));
+        assertThat(result.portfolioSummary().totalBuyAmount()).isEqualTo(1_000_000L);
+        assertThat(result.portfolioSummary().totalValuationAmount()).isEqualTo(900_000L);
+        assertThat(result.portfolioSummary().totalProfitLoss()).isEqualTo(-100_000L);
+        assertThat(result.portfolioSummary().totalReturnRate()).isEqualByComparingTo(new BigDecimal("-10.00"));
     }
 
     @Test

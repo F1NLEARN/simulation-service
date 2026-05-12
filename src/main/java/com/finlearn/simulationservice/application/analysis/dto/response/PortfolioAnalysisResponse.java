@@ -11,15 +11,8 @@ import java.util.UUID;
 
 public record PortfolioAnalysisResponse(
         UUID accountId,
-        long totalBuyAmount,
-        long totalValuationAmount,
-        long totalProfitLoss,
-        BigDecimal totalReturnRate,
-        long cashBalance,
-        long totalAssetAmount,
-        int holdingCount,
-        BigDecimal topHoldingWeight,
-        BigDecimal cashWeight,
+        PortfolioSummaryResponse portfolioSummary,
+        PortfolioAllocationResponse allocation,
         PortfolioDiagnosisResponse diagnosis,
         List<PortfolioRecommendationResponse> recommendations,
         List<PortfolioHoldingResponse> holdings
@@ -64,21 +57,23 @@ public record PortfolioAnalysisResponse(
                         .multiply(BigDecimal.valueOf(100))
                         .divide(BigDecimal.valueOf(totalAssetAmount), 2, RoundingMode.HALF_UP);
 
+        PortfolioSummaryResponse summaryResponse = new PortfolioSummaryResponse(
+                totalBuyAmount, totalValuationAmount, cashBalance,
+                totalAssetAmount, totalProfitLoss, totalReturnRate
+        );
+
+        PortfolioAllocationResponse allocationResponse = new PortfolioAllocationResponse(
+                null, null, cashWeight, topHoldingWeight, holdings.size()
+        );
+
         List<PortfolioRecommendationResponse> recommendationResponses = diagnosis.recommendations().stream()
                 .map(PortfolioRecommendationResponse::from)
                 .toList();
 
         return new PortfolioAnalysisResponse(
                 account.getAccountId(),
-                totalBuyAmount,
-                totalValuationAmount,
-                totalProfitLoss,
-                totalReturnRate,
-                cashBalance,
-                totalAssetAmount,
-                holdings.size(),
-                topHoldingWeight,
-                cashWeight,
+                summaryResponse,
+                allocationResponse,
                 PortfolioDiagnosisResponse.from(diagnosis),
                 recommendationResponses,
                 holdingResponses

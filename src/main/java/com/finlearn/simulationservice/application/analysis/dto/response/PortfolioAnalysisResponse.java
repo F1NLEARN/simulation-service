@@ -1,5 +1,6 @@
 package com.finlearn.simulationservice.application.analysis.dto.response;
 
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 
@@ -19,9 +20,12 @@ public record PortfolioAnalysisResponse(
         int holdingCount,
         BigDecimal topHoldingWeight,
         BigDecimal cashWeight,
+        PortfolioDiagnosisResponse diagnosis,
+        List<PortfolioRecommendationResponse> recommendations,
         List<PortfolioHoldingResponse> holdings
 ) {
-    public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings) {
+    public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings,
+                                               PortfolioDiagnosis diagnosis) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
                 .sum();
@@ -60,6 +64,10 @@ public record PortfolioAnalysisResponse(
                         .multiply(BigDecimal.valueOf(100))
                         .divide(BigDecimal.valueOf(totalAssetAmount), 2, RoundingMode.HALF_UP);
 
+        List<PortfolioRecommendationResponse> recommendationResponses = diagnosis.recommendations().stream()
+                .map(PortfolioRecommendationResponse::from)
+                .toList();
+
         return new PortfolioAnalysisResponse(
                 account.getAccountId(),
                 totalBuyAmount,
@@ -71,6 +79,8 @@ public record PortfolioAnalysisResponse(
                 holdings.size(),
                 topHoldingWeight,
                 cashWeight,
+                PortfolioDiagnosisResponse.from(diagnosis),
+                recommendationResponses,
                 holdingResponses
         );
     }

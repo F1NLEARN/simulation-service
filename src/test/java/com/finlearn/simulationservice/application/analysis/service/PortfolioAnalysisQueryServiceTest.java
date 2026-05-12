@@ -2,6 +2,10 @@ package com.finlearn.simulationservice.application.analysis.service;
 
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAnalysisResponse;
 import com.finlearn.simulationservice.application.analysis.query.GetPortfolioAnalysisQuery;
+import com.finlearn.simulationservice.domain.analysis.service.PortfolioAnalysisDomainService;
+import com.finlearn.simulationservice.domain.analysis.vo.ConcentrationLevel;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
+import com.finlearn.simulationservice.domain.analysis.vo.RiskLevel;
 import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
@@ -25,6 +29,8 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -36,8 +42,15 @@ class PortfolioAnalysisQueryServiceTest {
     @Mock
     private HoldingRepository holdingRepository;
 
+    @Mock
+    private PortfolioAnalysisDomainService portfolioAnalysisDomainService;
+
     @InjectMocks
     private PortfolioAnalysisQueryService portfolioAnalysisQueryService;
+
+    private static final PortfolioDiagnosis STUB_DIAGNOSIS = new PortfolioDiagnosis(
+            ConcentrationLevel.LOW, RiskLevel.STABLE, "분산투자가 잘 구성되어 있습니다.", List.of(), List.of()
+    );
 
     private static final UUID INVESTOR_ID = UUID.randomUUID();
     private static final UUID ACCOUNT_ID = UUID.randomUUID();
@@ -67,6 +80,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -96,6 +110,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -121,6 +136,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -144,6 +160,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -168,6 +185,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));

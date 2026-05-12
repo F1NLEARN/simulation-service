@@ -10,6 +10,10 @@ spring:
       docker: "kafka,topics"
   config:
     import: optional:configserver:http://localhost:8888
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   datasource:
     url: jdbc:postgresql://localhost:5432/simulationdb
     driver-class-name: org.postgresql.Driver

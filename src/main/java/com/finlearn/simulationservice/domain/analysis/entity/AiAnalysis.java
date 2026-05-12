@@ -79,6 +79,24 @@ public class AiAnalysis extends BaseEntity {
     private LocalDateTime analyzedAt;
 
     @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 30)
+    private AnalysisType analysisType;
+
+    @Column(nullable = false)
+    private String summary;
+
+    @Column(columnDefinition = "TEXT")
+    private String failureReason;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String prompt;
+
+    @Lob
+    @Column(columnDefinition = "TEXT")
+    private String modelResponse;
+
+    @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private AnalysisStatus analysisStatus;
 
@@ -89,13 +107,17 @@ public class AiAnalysis extends BaseEntity {
         this.targetUserName = command.targetUserName();
         this.seasonId = command.seasonId();
         this.seasonNumber = command.seasonNumber();
+        this.analysisType = command.analysisType();
         this.riskScore = AnalysisScore.of(command.riskScore());
         this.portfolioConcentrationScore = AnalysisScore.of(command.portfolioConcentrationScore());
         this.recommendedLearningTopic = command.recommendedLearningTopic();
+        this.summary = command.summary();
         this.aiFeedbackMessage = command.aiFeedbackMessage();
         this.analysisPeriodStartAt = command.analysisPeriodStartAt();
         this.analysisPeriodEndAt = command.analysisPeriodEndAt();
         this.analyzedAt = command.analyzedAt();
+        this.prompt = command.prompt();
+        this.modelResponse = command.modelResponse();
         this.analysisStatus = AnalysisStatus.READY;
     }
 
@@ -111,15 +133,23 @@ public class AiAnalysis extends BaseEntity {
     }
 
     public void fail() {
+        fail(null);
+    }
+
+    public void fail(String reason) {
         if (!this.analysisStatus.canFail()) {
             throw new AiAnalysisDomainException(AiAnalysisErrorCode.CANNOT_FAIL);
         }
         this.analysisStatus = AnalysisStatus.FAILED;
+        this.failureReason = reason;
     }
 
     private static void validate(CreateAiAnalysisCommand command) {
         if (command.accountId() == null) {
             throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_ACCOUNT_ID);
+        }
+        if (command.analysisType() == null) {
+            throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_ANALYSIS_TYPE);
         }
         if (command.targetUserId() == null) {
             throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_TARGET_USER_ID);
@@ -141,6 +171,9 @@ public class AiAnalysis extends BaseEntity {
         }
         if (command.recommendedLearningTopic() == null || command.recommendedLearningTopic().isBlank()) {
             throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_RECOMMENDED_LEARNING_TOPIC);
+        }
+        if (command.summary() == null || command.summary().isBlank()) {
+            throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_SUMMARY);
         }
         if (command.aiFeedbackMessage() == null || command.aiFeedbackMessage().isBlank()) {
             throw new AiAnalysisDomainException(AiAnalysisErrorCode.INVALID_AI_FEEDBACK_MESSAGE);

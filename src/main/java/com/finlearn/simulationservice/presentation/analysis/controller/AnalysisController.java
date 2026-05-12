@@ -24,14 +24,13 @@ import java.util.UUID;
 public class AnalysisController {
 
     private final PortfolioAnalysisQueryService portfolioAnalysisQueryService;
+    private final AiAnalysisHistoryQueryService aiAnalysisHistoryQueryService;
 
     @GetMapping("/portfolio")
     public CommonResponse<PortfolioAnalysisResponse> getPortfolioAnalysis(
             @RequestHeader("X-User-Id") String userIdHeader
     ) {
         UUID investorId = InvestmentUserIdHeaderParser.parse(userIdHeader);
-        GetPortfolioAnalysisQuery query = new GetPortfolioAnalysisQuery(investorId);
-        return CommonResponse.success("포트폴리오 분석 조회 성공", portfolioAnalysisQueryService.getPortfolioAnalysis(query));
         return CommonResponse.success("포트폴리오 분석 조회 성공",
                 portfolioAnalysisQueryService.getPortfolioAnalysis(new GetPortfolioAnalysisQuery(investorId)));
     }
@@ -46,5 +45,13 @@ public class AnalysisController {
                 .getPortfolioAnalysis(new GetPortfolioAnalysisQuery(investorId));
         return CommonResponse.success("포트폴리오 분석 갱신 성공", response);
     }
+
+    @GetMapping("/portfolio/history")
+    public CommonResponse<List<AiAnalysisHistoryResponse>> getPortfolioAnalysisHistory(
+            @RequestHeader("X-User-Id") String userIdHeader
+    ) {
+        UUID investorId = InvestmentUserIdHeaderParser.parse(userIdHeader);
+        return CommonResponse.success("포트폴리오 분석 이력 조회 성공",
+                aiAnalysisHistoryQueryService.getHistory(new GetAiAnalysisHistoryQuery(investorId)));
     }
 }

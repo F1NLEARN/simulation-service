@@ -18,6 +18,7 @@ public record PortfolioAnalysisResponse(
         List<PortfolioHoldingResponse> holdings
 ) {
     public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings,
+                                               PortfolioAllocationResponse allocation,
                                                PortfolioDiagnosis diagnosis) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
@@ -44,26 +45,9 @@ public record PortfolioAnalysisResponse(
                 })
                 .toList();
 
-        BigDecimal topHoldingWeight = holdingResponses.stream()
-                .map(PortfolioHoldingResponse::weight)
-                .max(BigDecimal::compareTo)
-                .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
-
-        long cashBalance = account.getCurrentCashBalance();
-        long totalAssetAmount = account.getTotalAssetAmount();
-        BigDecimal cashWeight = totalAssetAmount == 0
-                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
-                : BigDecimal.valueOf(cashBalance)
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(BigDecimal.valueOf(totalAssetAmount), 2, RoundingMode.HALF_UP);
-
         PortfolioSummaryResponse summaryResponse = new PortfolioSummaryResponse(
-                totalBuyAmount, totalValuationAmount, cashBalance,
-                totalAssetAmount, totalProfitLoss, totalReturnRate
-        );
-
-        PortfolioAllocationResponse allocationResponse = new PortfolioAllocationResponse(
-                null, null, cashWeight, topHoldingWeight, holdings.size()
+                totalBuyAmount, totalValuationAmount, account.getCurrentCashBalance(),
+                account.getTotalAssetAmount(), totalProfitLoss, totalReturnRate
         );
 
         List<PortfolioRecommendationResponse> recommendationResponses = diagnosis.recommendations().stream()
@@ -73,7 +57,7 @@ public record PortfolioAnalysisResponse(
         return new PortfolioAnalysisResponse(
                 account.getAccountId(),
                 summaryResponse,
-                allocationResponse,
+                allocation,
                 PortfolioDiagnosisResponse.from(diagnosis),
                 recommendationResponses,
                 holdingResponses

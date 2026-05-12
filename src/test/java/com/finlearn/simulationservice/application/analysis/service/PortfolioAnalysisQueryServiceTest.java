@@ -10,9 +10,12 @@ import com.finlearn.simulationservice.domain.holding.command.CreateHoldingComman
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
+import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
+import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
+import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -41,6 +44,9 @@ class PortfolioAnalysisQueryServiceTest {
 
     @Mock
     private HoldingRepository holdingRepository;
+
+    @Mock
+    private StockItemRepository stockItemRepository;
 
     @Mock
     private PortfolioAnalysisDomainService portfolioAnalysisDomainService;
@@ -110,6 +116,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -136,6 +143,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -160,6 +168,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -185,6 +194,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -194,6 +204,31 @@ class PortfolioAnalysisQueryServiceTest {
         assertThat(result.portfolioSummary().totalValuationAmount()).isEqualTo(900_000L);
         assertThat(result.portfolioSummary().totalProfitLoss()).isEqualTo(-100_000L);
         assertThat(result.portfolioSummary().totalReturnRate()).isEqualByComparingTo(new BigDecimal("-10.00"));
+    }
+
+    @Test
+    @DisplayName("StockItem 조회 결과로 STOCK/ETF 비중을 올바르게 계산한다.")
+    void getPortfolioAnalysis_withStockAndEtf_calculatesAssetTypeWeights() {
+        // 종목A(STOCK): val=300,000 → stockWeight=75%
+        // 종목B(ETF):   val=100,000 → etfWeight=25%
+        InvestmentAccount account = createActiveAccount();
+        Holding holdingA = createHolding("A001", "삼성전자", 3L, 100_000L, 100_000L);
+        Holding holdingB = createHolding("B001", "KODEX200", 1L, 100_000L, 100_000L);
+
+        StockItem stockItemA = StockItem.create("삼성전자", "A001", StockAssetType.STOCK);
+        StockItem stockItemB = StockItem.create("KODEX200", "B001", StockAssetType.ETF);
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItemA, stockItemB));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        assertThat(result.allocation().stockWeight()).isEqualByComparingTo(new BigDecimal("75.00"));
+        assertThat(result.allocation().etfWeight()).isEqualByComparingTo(new BigDecimal("25.00"));
     }
 
     @Test

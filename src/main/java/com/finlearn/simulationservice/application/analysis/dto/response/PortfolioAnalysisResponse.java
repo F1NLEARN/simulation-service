@@ -1,6 +1,7 @@
 package com.finlearn.simulationservice.application.analysis.dto.response;
 
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
+import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -13,9 +14,14 @@ public record PortfolioAnalysisResponse(
         long totalValuationAmount,
         long totalProfitLoss,
         BigDecimal totalReturnRate,
+        long cashBalance,
+        long totalAssetAmount,
+        int holdingCount,
+        BigDecimal topHoldingWeight,
+        BigDecimal cashWeight,
         List<PortfolioHoldingResponse> holdings
 ) {
-    public static PortfolioAnalysisResponse of(UUID accountId, List<Holding> holdings) {
+    public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
                 .sum();
@@ -41,12 +47,30 @@ public record PortfolioAnalysisResponse(
                 })
                 .toList();
 
+        BigDecimal topHoldingWeight = holdingResponses.stream()
+                .map(PortfolioHoldingResponse::weight)
+                .max(BigDecimal::compareTo)
+                .orElse(BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP));
+
+        long cashBalance = account.getCurrentCashBalance();
+        long totalAssetAmount = account.getTotalAssetAmount();
+        BigDecimal cashWeight = totalAssetAmount == 0
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.valueOf(cashBalance)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totalAssetAmount), 2, RoundingMode.HALF_UP);
+
         return new PortfolioAnalysisResponse(
-                accountId,
+                account.getAccountId(),
                 totalBuyAmount,
                 totalValuationAmount,
                 totalProfitLoss,
                 totalReturnRate,
+                cashBalance,
+                totalAssetAmount,
+                holdings.size(),
+                topHoldingWeight,
+                cashWeight,
                 holdingResponses
         );
     }

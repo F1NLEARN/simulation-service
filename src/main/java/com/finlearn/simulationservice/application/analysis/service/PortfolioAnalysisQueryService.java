@@ -30,6 +30,6 @@ public class PortfolioAnalysisQueryService {
 
         List<Holding> holdings = holdingRepository.findAllWithFilter(account.getAccountId(), null);
 
-        return PortfolioAnalysisResponse.of(account.getAccountId(), holdings);
+        return PortfolioAnalysisResponse.of(account, holdings);
     }
 }

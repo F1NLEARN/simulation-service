@@ -77,6 +77,11 @@ class PortfolioAnalysisQueryServiceTest {
         assertThat(result.totalProfitLoss()).isZero();
         assertThat(result.totalReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(result.holdings()).isEmpty();
+        assertThat(result.cashBalance()).isEqualTo(10_000_000L);
+        assertThat(result.totalAssetAmount()).isEqualTo(10_000_000L);
+        assertThat(result.holdingCount()).isZero();
+        assertThat(result.topHoldingWeight()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.cashWeight()).isEqualByComparingTo(new BigDecimal("100.00"));
     }
 
     @Test
@@ -149,6 +154,8 @@ class PortfolioAnalysisQueryServiceTest {
                 .map(h -> h.weight())
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
         assertThat(totalWeight).isEqualByComparingTo(new BigDecimal("100.00"));
+        assertThat(result.holdingCount()).isEqualTo(2);
+        assertThat(result.topHoldingWeight()).isEqualByComparingTo(new BigDecimal("75.00"));
     }
 
     @Test

@@ -63,7 +63,7 @@ class TradeHistoryControllerTest {
     void getTradeHistoryList_requestParamsMappedCorrectly() throws Exception {
         when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        mockMvc.perform(get("/api/trade-histories")
+        mockMvc.perform(get("/api/v1/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString())
                         .param("tradeType", "BUY")
                         .param("status", "COMPLETED")
@@ -90,7 +90,7 @@ class TradeHistoryControllerTest {
     void getTradeHistoryList_defaultSort_isTradeAtDesc() throws Exception {
         when(tradeHistoryQueryService.getTradeHistoryList(any())).thenReturn(new PageImpl<>(List.of(), PageRequest.of(0, 20), 0));
 
-        mockMvc.perform(get("/api/trade-histories")
+        mockMvc.perform(get("/api/v1/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isOk());
 
@@ -112,7 +112,7 @@ class TradeHistoryControllerTest {
         when(tradeHistoryQueryService.getTradeHistoryList(any()))
                 .thenReturn(new PageImpl<>(List.of(response), PageRequest.of(0, 20), 1));
 
-        mockMvc.perform(get("/api/trade-histories")
+        mockMvc.perform(get("/api/v1/trade-histories")
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].tradeHistoryId").value(TRADE_HISTORY_ID.toString()))
@@ -137,7 +137,7 @@ class TradeHistoryControllerTest {
         when(tradeHistoryQueryService.getTradeHistoryDetail(eq(ACCOUNT_ID), eq(TRADE_HISTORY_ID)))
                 .thenReturn(response);
 
-        mockMvc.perform(get("/api/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
+        mockMvc.perform(get("/api/v1/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -156,7 +156,7 @@ class TradeHistoryControllerTest {
         when(tradeHistoryQueryService.getTradeHistoryDetail(any(), any()))
                 .thenThrow(new TradeHistoryNotFoundException());
 
-        mockMvc.perform(get("/api/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
+        mockMvc.perform(get("/api/v1/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isNotFound());
     }
@@ -167,7 +167,7 @@ class TradeHistoryControllerTest {
         when(tradeHistoryQueryService.getTradeHistoryDetail(any(), any()))
                 .thenThrow(new TradeHistoryForbiddenException());
 
-        mockMvc.perform(get("/api/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
+        mockMvc.perform(get("/api/v1/trade-histories/{tradeHistoryId}", TRADE_HISTORY_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isForbidden());
     }

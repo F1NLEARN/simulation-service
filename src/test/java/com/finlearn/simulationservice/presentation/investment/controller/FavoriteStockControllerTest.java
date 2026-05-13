@@ -58,7 +58,7 @@ class FavoriteStockControllerTest {
         when(investmentService.registerFavoriteStock(eq(userId), any(RegisterFavoriteStockRequest.class)))
                 .thenReturn(favoriteStockId);
 
-        mockMvc.perform(post("/api/investments/favorites")
+        mockMvc.perform(post("/api/v1/investments/favorites")
                         .header("X-User-Id", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
@@ -77,7 +77,7 @@ class FavoriteStockControllerTest {
 
         when(investmentService.getFavoriteStocks(userId)).thenReturn(List.of(first, second));
 
-        mockMvc.perform(get("/api/investments/favorites")
+        mockMvc.perform(get("/api/v1/investments/favorites")
                         .header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -93,7 +93,7 @@ class FavoriteStockControllerTest {
     void deleteFavoriteStock() throws Exception {
         UUID userId = UUID.randomUUID();
 
-        mockMvc.perform(delete("/api/investments/favorites/005930")
+        mockMvc.perform(delete("/api/v1/investments/favorites/005930")
                         .header("X-User-Id", userId.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -108,7 +108,7 @@ class FavoriteStockControllerTest {
         doThrow(new InvestmentException(InvestmentErrorCode.FAVORITE_STOCK_ALREADY_EXISTS))
                 .when(investmentService).registerFavoriteStock(eq(userId), any(RegisterFavoriteStockRequest.class));
 
-        mockMvc.perform(post("/api/investments/favorites")
+        mockMvc.perform(post("/api/v1/investments/favorites")
                         .header("X-User-Id", userId.toString())
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))

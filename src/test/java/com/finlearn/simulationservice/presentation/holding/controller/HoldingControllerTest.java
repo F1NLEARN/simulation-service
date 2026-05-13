@@ -54,7 +54,7 @@ class HoldingControllerTest {
         );
         when(holdingQueryService.getHoldingList(any())).thenReturn(List.of(response));
 
-        mockMvc.perform(get("/api/holdings")
+        mockMvc.perform(get("/api/v1/holdings")
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -76,7 +76,7 @@ class HoldingControllerTest {
         );
         when(holdingQueryService.getHoldingDetail(ACCOUNT_ID, HOLDING_ID)).thenReturn(response);
 
-        mockMvc.perform(get("/api/holdings/{holdingId}", HOLDING_ID)
+        mockMvc.perform(get("/api/v1/holdings/{holdingId}", HOLDING_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
@@ -94,7 +94,7 @@ class HoldingControllerTest {
         when(holdingQueryService.getHoldingDetail(ACCOUNT_ID, HOLDING_ID))
                 .thenThrow(new HoldingNotFoundException());
 
-        mockMvc.perform(get("/api/holdings/{holdingId}", HOLDING_ID)
+        mockMvc.perform(get("/api/v1/holdings/{holdingId}", HOLDING_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
@@ -107,7 +107,7 @@ class HoldingControllerTest {
         when(holdingQueryService.getHoldingDetail(ACCOUNT_ID, HOLDING_ID))
                 .thenThrow(new HoldingForbiddenException());
 
-        mockMvc.perform(get("/api/holdings/{holdingId}", HOLDING_ID)
+        mockMvc.perform(get("/api/v1/holdings/{holdingId}", HOLDING_ID)
                         .header("X-Account-Id", ACCOUNT_ID.toString()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))

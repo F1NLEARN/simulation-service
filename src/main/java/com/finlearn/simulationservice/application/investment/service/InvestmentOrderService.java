@@ -14,6 +14,7 @@ import com.finlearn.simulationservice.domain.investment.exception.InvestmentErro
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
+import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
 import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
 import java.time.LocalDateTime;
@@ -33,6 +34,7 @@ public class InvestmentOrderService {
 
     private final InvestmentAccountRepository investmentAccountRepository;
     private final StockItemRepository stockItemRepository;
+    private final StockPriceRepository stockPriceRepository;
     private final HoldingRepository holdingRepository;
     private final TradeHistoryRepository tradeHistoryRepository;
 
@@ -49,10 +51,8 @@ public class InvestmentOrderService {
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
-        Long currentPrice = stockItem.getCurrentPrice();
-        if (currentPrice == null || currentPrice <= 0) {
-            throw new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE);
-        }
+        Long currentPrice = stockPriceRepository.findCurrentPrice(normalizedStockCode)
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
 
         long totalAmount = currentPrice * request.quantity();
 
@@ -116,10 +116,8 @@ public class InvestmentOrderService {
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
-        Long currentPrice = stockItem.getCurrentPrice();
-        if (currentPrice == null || currentPrice <= 0) {
-            throw new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE);
-        }
+        Long currentPrice = stockPriceRepository.findCurrentPrice(normalizedStockCode)
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
 
         Holding holding = holdingRepository.findByAccountIdAndInstrumentCode(account.getAccountId(), normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.HOLDING_STOCK_NOT_FOUND));

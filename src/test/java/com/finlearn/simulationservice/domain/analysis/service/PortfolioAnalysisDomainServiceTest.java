@@ -130,7 +130,7 @@ class PortfolioAnalysisDomainServiceTest {
 
         assertThat(result.recommendations())
                 .anyMatch(r -> r.recommendationType() == RecommendationType.QUIZ
-                        && r.targetCategory().equals("ETF_BASICS"));
+                        && r.targetCategory().equals("DOMESTIC_ETF"));
     }
 
     @Test
@@ -141,7 +141,7 @@ class PortfolioAnalysisDomainServiceTest {
 
         assertThat(result.recommendations())
                 .noneMatch(r -> r.recommendationType() == RecommendationType.QUIZ
-                        && "ETF_BASICS".equals(r.targetCategory()));
+                        && "DOMESTIC_ETF".equals(r.targetCategory()));
     }
 
     @Test
@@ -152,6 +152,6 @@ class PortfolioAnalysisDomainServiceTest {
 
         assertThat(result.recommendations())
                 .noneMatch(r -> r.recommendationType() == RecommendationType.QUIZ
-                        && "ETF_BASICS".equals(r.targetCategory()));
+                        && "DOMESTIC_ETF".equals(r.targetCategory()));
     }
 }

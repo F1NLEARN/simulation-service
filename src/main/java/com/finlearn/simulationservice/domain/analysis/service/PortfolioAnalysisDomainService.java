@@ -89,7 +89,7 @@ public class PortfolioAnalysisDomainService {
         if (etfWeight.compareTo(BigDecimal.ZERO) == 0 && holdingCount > 0) {
             recommendations.add(new PortfolioRecommendation(
                     RecommendationType.QUIZ,
-                    "ETF_BASICS",
+                    "DOMESTIC_ETF",
                     "ETF 보유 비중이 없습니다.",
                     "ETF 기초 학습 퀴즈를 추천합니다."
             ));

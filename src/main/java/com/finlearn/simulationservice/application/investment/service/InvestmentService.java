@@ -124,6 +124,7 @@ public class InvestmentService {
                 account.getAccountId(),
                 account.getParticipant().getInvestorId(),
                 account.getParticipant().getSeasonId(),
+                account.getParticipant().getSeasonNumber(),
                 transaction.getInstrumentCode(),
                 transaction.getQuantity(),
                 transaction.getTradePrice(),

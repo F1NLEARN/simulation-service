@@ -62,7 +62,7 @@ class StockControllerTest {
         );
         when(investmentService.getStockItems(null)).thenReturn(List.of(first, second));
 
-        mockMvc.perform(get("/api/investments/stocks"))
+        mockMvc.perform(get("/api/v1/investments/stocks"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("종목 목록 조회 성공"))
@@ -80,7 +80,7 @@ class StockControllerTest {
         doThrow(new InvestmentException(InvestmentErrorCode.INVALID_ASSET_TYPE))
                 .when(investmentService).getStockItems("CRYPTO");
 
-        mockMvc.perform(get("/api/investments/stocks").param("assetType", "CRYPTO"))
+        mockMvc.perform(get("/api/v1/investments/stocks").param("assetType", "CRYPTO"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("지원하지 않는 자산 유형입니다."));
@@ -99,7 +99,7 @@ class StockControllerTest {
         );
         when(investmentService.getStockItemDetail("005930")).thenReturn(response);
 
-        mockMvc.perform(get("/api/investments/stocks/005930"))
+        mockMvc.perform(get("/api/v1/investments/stocks/005930"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("종목 상세 조회 성공"))
@@ -115,7 +115,7 @@ class StockControllerTest {
         doThrow(new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND))
                 .when(investmentService).getStockItemDetail("999999");
 
-        mockMvc.perform(get("/api/investments/stocks/999999"))
+        mockMvc.perform(get("/api/v1/investments/stocks/999999"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("종목을 찾을 수 없습니다."));
@@ -127,7 +127,7 @@ class StockControllerTest {
         when(investmentService.getCurrentStockPrice("005930"))
                 .thenReturn(new StockPriceResponse("005930", 73500L));
 
-        mockMvc.perform(get("/api/investments/stocks/005930/price"))
+        mockMvc.perform(get("/api/v1/investments/stocks/005930/price"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("현재가 조회 성공"))
@@ -141,7 +141,7 @@ class StockControllerTest {
         doThrow(new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND))
                 .when(investmentService).getCurrentStockPrice("999999");
 
-        mockMvc.perform(get("/api/investments/stocks/999999/price"))
+        mockMvc.perform(get("/api/v1/investments/stocks/999999/price"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.message").value("현재 시세를 찾을 수 없습니다."));

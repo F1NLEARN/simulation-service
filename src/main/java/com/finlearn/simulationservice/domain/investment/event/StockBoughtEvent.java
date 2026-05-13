@@ -7,6 +7,7 @@ public record StockBoughtEvent(
         UUID accountId,
         UUID investorId,
         UUID seasonId,
+        int seasonNumber,
         String instrumentCode,
         long quantity,
         long tradePrice,

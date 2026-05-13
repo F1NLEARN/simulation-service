@@ -22,11 +22,13 @@ public class PortfolioAnalysisDomainService {
     private static final int LOW_HOLDING_COUNT_THRESHOLD = 2;
 
     public PortfolioDiagnosis diagnose(BigDecimal topHoldingWeight, int holdingCount,
-                                       BigDecimal cashWeight, BigDecimal totalReturnRate) {
+                                       BigDecimal cashWeight, BigDecimal totalReturnRate,
+                                       BigDecimal etfWeight) {
         ConcentrationLevel concentrationLevel = diagnoseConcentration(topHoldingWeight);
         RiskLevel riskLevel = diagnoseRisk(concentrationLevel);
         List<String> warnings = generateWarnings(topHoldingWeight, holdingCount, cashWeight, totalReturnRate);
-        List<PortfolioRecommendation> recommendations = generateRecommendations(concentrationLevel, totalReturnRate);
+        List<PortfolioRecommendation> recommendations = generateRecommendations(
+                concentrationLevel, totalReturnRate, etfWeight, holdingCount);
         String summary = generateSummary(concentrationLevel, cashWeight, totalReturnRate);
 
         return new PortfolioDiagnosis(concentrationLevel, riskLevel, summary, warnings, recommendations);
@@ -71,7 +73,8 @@ public class PortfolioAnalysisDomainService {
     }
 
     private List<PortfolioRecommendation> generateRecommendations(ConcentrationLevel concentrationLevel,
-                                                                    BigDecimal totalReturnRate) {
+                                                                    BigDecimal totalReturnRate,
+                                                                    BigDecimal etfWeight, int holdingCount) {
         List<PortfolioRecommendation> recommendations = new ArrayList<>();
 
         if (concentrationLevel == ConcentrationLevel.HIGH || concentrationLevel == ConcentrationLevel.MEDIUM) {
@@ -82,7 +85,15 @@ public class PortfolioAnalysisDomainService {
                     "단일 종목 비중을 낮추고 ETF 또는 다른 업종으로 분산해보세요."
             ));
         }
-        // ETF 비중 0% 추천은 5순위(ETF 자산군 비중 계산) 구현 후 추가 예정
+
+        if (etfWeight.compareTo(BigDecimal.ZERO) == 0 && holdingCount > 0) {
+            recommendations.add(new PortfolioRecommendation(
+                    RecommendationType.QUIZ,
+                    "ETF_BASICS",
+                    "ETF 보유 비중이 없습니다.",
+                    "ETF 기초 학습 퀴즈를 추천합니다."
+            ));
+        }
 
         if (totalReturnRate.compareTo(PROFIT_THRESHOLD) >= 0) {
             recommendations.add(new PortfolioRecommendation(

@@ -6,8 +6,8 @@ import com.finlearn.simulationservice.domain.holding.exception.HoldingNotFoundEx
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
-import com.finlearn.simulationservice.domain.tradehistory.event.StockBoughtEvent;
-import com.finlearn.simulationservice.domain.tradehistory.event.StockSoldEvent;
+import com.finlearn.simulationservice.domain.investment.event.StockBoughtEvent;
+import com.finlearn.simulationservice.domain.investment.event.StockSoldEvent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;

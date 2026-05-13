@@ -86,7 +86,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -117,7 +117,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -144,7 +144,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -169,7 +169,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -195,7 +195,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -222,7 +222,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItemA, stockItemB));
-        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));

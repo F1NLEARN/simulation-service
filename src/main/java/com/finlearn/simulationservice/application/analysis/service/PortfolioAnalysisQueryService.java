@@ -48,9 +48,18 @@ public class PortfolioAnalysisQueryService {
 
         PortfolioAllocationResponse allocation = buildAllocation(account, holdings);
 
+        long totalBuyAmount = holdings.stream().mapToLong(Holding::getTotalBuyAmount).sum();
+        long totalValuationAmount = holdings.stream().mapToLong(Holding::getValuationAmount).sum();
+        long totalProfitLoss = totalValuationAmount - totalBuyAmount;
+        BigDecimal holdingsReturnRate = totalBuyAmount == 0
+                ? BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP)
+                : BigDecimal.valueOf(totalProfitLoss)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totalBuyAmount), 2, RoundingMode.HALF_UP);
+
         PortfolioDiagnosis diagnosis = portfolioAnalysisDomainService.diagnose(
                 allocation.topHoldingWeight(), holdings.size(),
-                allocation.cashWeight(), account.getTotalReturnRate());
+                allocation.cashWeight(), holdingsReturnRate, allocation.etfWeight());
 
         return PortfolioAnalysisResponse.of(account, holdings, allocation, diagnosis);
     }

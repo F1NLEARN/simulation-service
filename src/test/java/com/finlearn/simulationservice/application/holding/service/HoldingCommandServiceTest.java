@@ -8,8 +8,8 @@ import com.finlearn.simulationservice.domain.holding.repository.HoldingRepositor
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
-import com.finlearn.simulationservice.domain.tradehistory.event.StockBoughtEvent;
-import com.finlearn.simulationservice.domain.tradehistory.event.StockSoldEvent;
+import com.finlearn.simulationservice.domain.investment.event.StockBoughtEvent;
+import com.finlearn.simulationservice.domain.investment.event.StockSoldEvent;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -47,15 +47,15 @@ class HoldingCommandServiceTest {
 
     private StockBoughtEvent buyEvent(long quantity, long price) {
         return new StockBoughtEvent(
-                ACCOUNT_ID, SEASON_ID, SEASON_NUMBER,
-                INSTRUMENT_CODE, quantity, price, quantity * price, 0L, LocalDateTime.now()
+                ACCOUNT_ID, UUID.randomUUID(), SEASON_ID, SEASON_NUMBER,
+                INSTRUMENT_CODE, quantity, price, quantity * price, LocalDateTime.now()
         );
     }
 
     private StockSoldEvent sellEvent(long quantity, long price) {
         return new StockSoldEvent(
-                ACCOUNT_ID, SEASON_ID, SEASON_NUMBER,
-                INSTRUMENT_CODE, quantity, price, quantity * price, 0L, LocalDateTime.now()
+                ACCOUNT_ID, UUID.randomUUID(), SEASON_ID,
+                INSTRUMENT_CODE, quantity, price, quantity * price, LocalDateTime.now()
         );
     }
 

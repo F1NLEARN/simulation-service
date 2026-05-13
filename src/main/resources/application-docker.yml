@@ -1,6 +1,10 @@
 spring:
   config:
     import: optional:configserver:http://finlearn-config-server:8888
+  data:
+    redis:
+      host: 34.22.76.220
+      port: 6379
   datasource:
     url: jdbc:postgresql://finlearn-postgres:5432/simulationdb
     username: ${DB_USERNAME:postgres}

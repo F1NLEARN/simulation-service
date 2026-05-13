@@ -1,6 +1,8 @@
 package com.finlearn.simulationservice.application.analysis.dto.response;
 
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
+import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -9,13 +11,15 @@ import java.util.UUID;
 
 public record PortfolioAnalysisResponse(
         UUID accountId,
-        long totalBuyAmount,
-        long totalValuationAmount,
-        long totalProfitLoss,
-        BigDecimal totalReturnRate,
+        PortfolioSummaryResponse portfolioSummary,
+        PortfolioAllocationResponse allocation,
+        PortfolioDiagnosisResponse diagnosis,
+        List<PortfolioRecommendationResponse> recommendations,
         List<PortfolioHoldingResponse> holdings
 ) {
-    public static PortfolioAnalysisResponse of(UUID accountId, List<Holding> holdings) {
+    public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings,
+                                               PortfolioAllocationResponse allocation,
+                                               PortfolioDiagnosis diagnosis) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
                 .sum();
@@ -41,12 +45,21 @@ public record PortfolioAnalysisResponse(
                 })
                 .toList();
 
+        PortfolioSummaryResponse summaryResponse = new PortfolioSummaryResponse(
+                totalBuyAmount, totalValuationAmount, account.getCurrentCashBalance(),
+                account.getTotalAssetAmount(), totalProfitLoss, totalReturnRate
+        );
+
+        List<PortfolioRecommendationResponse> recommendationResponses = diagnosis.recommendations().stream()
+                .map(PortfolioRecommendationResponse::from)
+                .toList();
+
         return new PortfolioAnalysisResponse(
-                accountId,
-                totalBuyAmount,
-                totalValuationAmount,
-                totalProfitLoss,
-                totalReturnRate,
+                account.getAccountId(),
+                summaryResponse,
+                allocation,
+                PortfolioDiagnosisResponse.from(diagnosis),
+                recommendationResponses,
                 holdingResponses
         );
     }

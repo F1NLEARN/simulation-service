@@ -21,15 +21,21 @@ public class PortfolioAnalysisDomainService {
     private static final BigDecimal PROFIT_THRESHOLD = new BigDecimal("5");
     private static final int LOW_HOLDING_COUNT_THRESHOLD = 2;
 
+    /**
+     * 포트폴리오를 진단합니다.
+     *
+     * @param holdingsReturnRate 보유 종목 매수금액 기준 수익률 (= (평가금액 - 매수금액) / 매수금액 × 100)
+     *                           account.getTotalReturnRate()와 다름 — 현금 및 실현손익 미포함
+     */
     public PortfolioDiagnosis diagnose(BigDecimal topHoldingWeight, int holdingCount,
-                                       BigDecimal cashWeight, BigDecimal totalReturnRate,
+                                       BigDecimal cashWeight, BigDecimal holdingsReturnRate,
                                        BigDecimal etfWeight) {
         ConcentrationLevel concentrationLevel = diagnoseConcentration(topHoldingWeight);
         RiskLevel riskLevel = diagnoseRisk(concentrationLevel);
-        List<String> warnings = generateWarnings(topHoldingWeight, holdingCount, cashWeight, totalReturnRate);
+        List<String> warnings = generateWarnings(topHoldingWeight, holdingCount, cashWeight, holdingsReturnRate);
         List<PortfolioRecommendation> recommendations = generateRecommendations(
-                concentrationLevel, totalReturnRate, etfWeight, holdingCount);
-        String summary = generateSummary(concentrationLevel, cashWeight, totalReturnRate);
+                concentrationLevel, holdingsReturnRate, etfWeight, holdingCount);
+        String summary = generateSummary(concentrationLevel, cashWeight, holdingsReturnRate);
 
         return new PortfolioDiagnosis(concentrationLevel, riskLevel, summary, warnings, recommendations);
     }
@@ -53,7 +59,7 @@ public class PortfolioAnalysisDomainService {
     }
 
     private List<String> generateWarnings(BigDecimal topHoldingWeight, int holdingCount,
-                                           BigDecimal cashWeight, BigDecimal totalReturnRate) {
+                                           BigDecimal cashWeight, BigDecimal holdingsReturnRate) {
         List<String> warnings = new ArrayList<>();
 
         if (topHoldingWeight.compareTo(HIGH_CONCENTRATION_THRESHOLD) >= 0) {
@@ -65,15 +71,15 @@ public class PortfolioAnalysisDomainService {
         if (cashWeight.compareTo(HIGH_CASH_THRESHOLD) >= 0) {
             warnings.add(String.format("현금 비중이 %s%%로 높아 투자가 미진행 상태입니다.", cashWeight.toPlainString()));
         }
-        if (totalReturnRate.compareTo(LOSS_THRESHOLD) <= 0) {
-            warnings.add(String.format("전체 수익률이 %s%%로 손실 구간입니다.", totalReturnRate.toPlainString()));
+        if (holdingsReturnRate.compareTo(LOSS_THRESHOLD) <= 0) {
+            warnings.add(String.format("전체 수익률이 %s%%로 손실 구간입니다.", holdingsReturnRate.toPlainString()));
         }
 
         return warnings;
     }
 
     private List<PortfolioRecommendation> generateRecommendations(ConcentrationLevel concentrationLevel,
-                                                                    BigDecimal totalReturnRate,
+                                                                    BigDecimal holdingsReturnRate,
                                                                     BigDecimal etfWeight, int holdingCount) {
         List<PortfolioRecommendation> recommendations = new ArrayList<>();
 
@@ -95,14 +101,14 @@ public class PortfolioAnalysisDomainService {
             ));
         }
 
-        if (totalReturnRate.compareTo(PROFIT_THRESHOLD) >= 0) {
+        if (holdingsReturnRate.compareTo(PROFIT_THRESHOLD) >= 0) {
             recommendations.add(new PortfolioRecommendation(
                     RecommendationType.QUIZ,
                     "ADVANCED_STRATEGY",
                     "수익률이 양호합니다.",
                     "포트폴리오 고급 운용 전략 학습 퀴즈를 추천합니다."
             ));
-        } else if (totalReturnRate.compareTo(LOSS_THRESHOLD) <= 0) {
+        } else if (holdingsReturnRate.compareTo(LOSS_THRESHOLD) <= 0) {
             recommendations.add(new PortfolioRecommendation(
                     RecommendationType.QUIZ,
                     "RISK_MANAGEMENT",
@@ -115,12 +121,12 @@ public class PortfolioAnalysisDomainService {
     }
 
     private String generateSummary(ConcentrationLevel concentrationLevel, BigDecimal cashWeight,
-                                    BigDecimal totalReturnRate) {
+                                    BigDecimal holdingsReturnRate) {
         if (cashWeight.compareTo(HIGH_CASH_THRESHOLD) >= 0) {
             return "현금 비중이 높아 투자 효율이 낮습니다.";
         }
-        boolean isProfit = totalReturnRate.compareTo(PROFIT_THRESHOLD) >= 0;
-        boolean isLoss = totalReturnRate.compareTo(LOSS_THRESHOLD) <= 0;
+        boolean isProfit = holdingsReturnRate.compareTo(PROFIT_THRESHOLD) >= 0;
+        boolean isLoss = holdingsReturnRate.compareTo(LOSS_THRESHOLD) <= 0;
 
         return switch (concentrationLevel) {
             case HIGH -> isProfit

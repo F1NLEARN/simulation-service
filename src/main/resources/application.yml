@@ -11,10 +11,13 @@ spring:
   config:
     import: optional:configserver:http://localhost:8888
   datasource:
-    url: jdbc:postgresql://localhost:5432/simulationdb
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:simulationdb}
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
 
 eureka:
   instance:
@@ -24,3 +27,17 @@ eureka:
     fetch-registry: true
     service-url:
       defaultZone: http://localhost:8761/eureka/
+
+external:
+  kis:
+    enabled: ${KIS_ENABLED:false}
+    base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
+    token-path: ${KIS_TOKEN_PATH:/oauth2/tokenP}
+    price-path: ${KIS_PRICE_PATH:/uapi/domestic-stock/v1/quotations/inquire-price}
+    app-key: ${KIS_APP_KEY:}
+    app-secret: ${KIS_APP_SECRET:}
+    market-div-code: ${KIS_MARKET_DIV_CODE:J}
+
+stock-master:
+  seed:
+    enabled: ${STOCK_MASTER_SEED_ENABLED:true}

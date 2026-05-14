@@ -5,6 +5,7 @@ import com.finlearn.simulationservice.application.analysis.dto.response.Portfoli
 import com.finlearn.simulationservice.application.analysis.query.GetPortfolioAnalysisQuery;
 import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
 import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
 import com.finlearn.simulationservice.domain.analysis.entity.AnalysisType;
 import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
 import com.finlearn.simulationservice.domain.analysis.service.PortfolioAnalysisDomainService;
@@ -113,7 +114,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -142,7 +143,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -167,7 +168,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -191,7 +192,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -217,7 +218,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -243,7 +244,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItemA, stockItemB));
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -283,7 +284,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
                 .thenReturn(diagnosisWithRecommendations);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED))
                 .thenReturn(Optional.of(completedAnalysis));
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -295,8 +296,8 @@ class PortfolioAnalysisQueryServiceTest {
     }
 
     @Test
-    @DisplayName("FAILED AI 분석만 있으면 룰 기반 recommendations을 반환한다.")
-    void getPortfolioAnalysis_failedAiAnalysis_returnsRuleBasedRecommendations() {
+    @DisplayName("COMPLETED AI 분석이 없으면 룰 기반 recommendations을 반환한다.")
+    void getPortfolioAnalysis_noCompletedAiAnalysis_returnsRuleBasedRecommendations() {
         InvestmentAccount account = createActiveAccount();
         List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
                 new PortfolioRecommendation(RecommendationType.PORTFOLIO, null, "룰 기반 이유", "룰 기반 메시지")
@@ -305,15 +306,13 @@ class PortfolioAnalysisQueryServiceTest {
                 ConcentrationLevel.HIGH, RiskLevel.AGGRESSIVE, "요약", List.of(), ruleBasedRecommendations
         );
 
-        AiAnalysis failedAnalysis = createFailedAnalysis();
-
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
                 .thenReturn(diagnosisWithRecommendations);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
-                .thenReturn(Optional.of(failedAnalysis));
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED))
+                .thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -340,7 +339,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
                 .thenReturn(diagnosisWithRecommendations);
-        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED))
                 .thenReturn(Optional.of(completedAnalysisWithInvalidJson));
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
@@ -366,19 +365,4 @@ class PortfolioAnalysisQueryServiceTest {
         return analysis;
     }
 
-    private AiAnalysis createFailedAnalysis() {
-        LocalDateTime now = LocalDateTime.now();
-        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
-                ACCOUNT_ID, INVESTOR_ID, "테스터",
-                SEASON_ID, 1,
-                AnalysisType.PORTFOLIO,
-                BigDecimal.valueOf(30), BigDecimal.valueOf(50),
-                "없음", "요약", "N/A",
-                now.toLocalDate().atStartOfDay(), now, now,
-                null, null
-        );
-        AiAnalysis analysis = AiAnalysis.create(command);
-        analysis.fail("API 오류");
-        return analysis;
-    }
 }

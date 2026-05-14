@@ -4,14 +4,16 @@ import com.finlearn.simulationservice.application.investment.dto.request.BuyStoc
 import com.finlearn.simulationservice.application.investment.dto.request.RegisterFavoriteStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.request.SellStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.response.FavoriteStockResponse;
-import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
+import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
+import com.finlearn.simulationservice.domain.investment.dto.ResolvedStockPrice;
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.SeedMoneyGrantHistory;
 import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.event.PointQuizPassedEvent;
 import com.finlearn.simulationservice.domain.investment.event.SeasonInvestmentAccountOpenedEvent;
 import com.finlearn.simulationservice.domain.investment.event.SeedMoneyGrantedEvent;
@@ -37,10 +39,14 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -155,6 +161,7 @@ class InvestmentServiceTest {
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
         when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(5000L));
 
         investmentService.buyStock(request);
 
@@ -219,6 +226,7 @@ class InvestmentServiceTest {
 
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
         when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
+        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(1000L));
 
         InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.buyStock(request));
 
@@ -471,28 +479,54 @@ class InvestmentServiceTest {
     void getStockItemsWithoutAssetType() {
         StockItem first = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
         StockItem second = StockItem.create("KODEX 200", "069500", StockAssetType.ETF);
-        when(stockItemRepository.findAllByCurrentPriceIsNotNullOrderByStockCodeAsc()).thenReturn(List.of(first, second));
+        PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "stockCode"));
+        when(stockItemRepository.findAll(pageRequest))
+                .thenReturn(new PageImpl<>(List.of(first, second), pageRequest, 2));
 
-        List<StockItemResponse> result = investmentService.getStockItems(null);
+        StockItemListResponse result = investmentService.getStockItems(null, null, 0, 20);
 
-        assertEquals(2, result.size());
-        assertEquals("삼성전자", result.get(0).name());
-        assertEquals("005930", result.get(0).stockCode());
-        assertEquals(StockAssetType.ETF, result.get(1).assetType());
+        assertEquals(2, result.items().size());
+        assertEquals("삼성전자", result.items().get(0).name());
+        assertEquals("005930", result.items().get(0).stockCode());
+        assertEquals(StockAssetType.ETF, result.items().get(1).assetType());
+        assertEquals(0, result.page());
+        assertEquals(20, result.size());
+        assertEquals(2, result.totalElements());
+        assertEquals(1, result.totalPages());
+        assertEquals(false, result.hasNext());
     }
 
     @Test
     @DisplayName("자산유형 필터가 있으면 해당 유형 종목만 조회한다.")
     void getStockItemsWithAssetType() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
-        when(stockItemRepository.findAllByAssetTypeAndCurrentPriceIsNotNullOrderByStockCodeAsc(StockAssetType.STOCK))
-                .thenReturn(List.of(stockItem));
+        PageRequest pageRequest = PageRequest.of(0, 20, Sort.by(Sort.Direction.ASC, "stockCode"));
+        when(stockItemRepository.findByAssetType(StockAssetType.STOCK, pageRequest))
+                .thenReturn(new PageImpl<>(List.of(stockItem), pageRequest, 1));
 
-        List<StockItemResponse> result = investmentService.getStockItems("stock");
+        StockItemListResponse result = investmentService.getStockItems("stock", null, 0, 20);
 
-        assertEquals(1, result.size());
-        assertEquals("005930", result.get(0).stockCode());
-        assertEquals(StockAssetType.STOCK, result.get(0).assetType());
+        assertEquals(1, result.items().size());
+        assertEquals("005930", result.items().get(0).stockCode());
+        assertEquals(StockAssetType.STOCK, result.items().get(0).assetType());
+    }
+
+    @Test
+    @DisplayName("키워드는 trim 후 종목명/종목코드 검색에 사용된다.")
+    void getStockItemsWithKeyword() {
+        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
+        PageRequest pageRequest = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "stockCode"));
+        when(stockItemRepository.searchStocksByAssetTypeAndKeyword(StockAssetType.STOCK, "삼성", pageRequest))
+                .thenReturn(new PageImpl<>(List.of(stockItem), pageRequest, 21));
+
+        StockItemListResponse result = investmentService.getStockItems("STOCK", "  삼성  ", 1, 10);
+
+        assertEquals(1, result.items().size());
+        assertEquals(1, result.page());
+        assertEquals(10, result.size());
+        assertEquals(21, result.totalElements());
+        assertEquals(3, result.totalPages());
+        assertEquals(true, result.hasNext());
     }
 
     @Test
@@ -500,7 +534,7 @@ class InvestmentServiceTest {
     void getStockItemsFailWhenInvalidAssetType() {
         InvestmentException exception = assertThrows(
                 InvestmentException.class,
-                () -> investmentService.getStockItems("CRYPTO")
+                () -> investmentService.getStockItems("CRYPTO", null, 0, 20)
         );
 
         assertEquals(InvestmentErrorCode.INVALID_ASSET_TYPE, exception.getErrorCode());
@@ -509,18 +543,36 @@ class InvestmentServiceTest {
     @Test
     @DisplayName("종목코드 기준 현재가를 조회할 수 있다.")
     void getCurrentStockPriceSuccess() {
-        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(73500L));
+        when(stockPriceRepository.findCurrentPriceWithSource("005930"))
+                .thenReturn(Optional.of(new ResolvedStockPrice("005930", 73500L, StockPriceSource.KIS)));
 
         StockPriceResponse response = investmentService.getCurrentStockPrice("005930");
 
         assertEquals("005930", response.stockCode());
         assertEquals(73500L, response.currentPrice());
+        assertEquals(StockPriceSource.KIS, response.source());
+    }
+
+    @Test
+    @DisplayName("KIS 현재가 조회 성공 시 종목 마스터의 캐시 가격을 갱신한다.")
+    void getCurrentStockPriceUpdateCacheWhenKisPriceResolved() {
+        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 70000L);
+        when(stockPriceRepository.findCurrentPriceWithSource("005930"))
+                .thenReturn(Optional.of(new ResolvedStockPrice("005930", 73500L, StockPriceSource.KIS)));
+        when(stockItemRepository.findByStockCode("005930"))
+                .thenReturn(Optional.of(stockItem));
+
+        StockPriceResponse response = investmentService.getCurrentStockPrice("005930");
+
+        assertEquals(73500L, response.currentPrice());
+        assertEquals(73500L, stockItem.getCurrentPrice());
+        assertNotNull(stockItem.getCurrentPriceUpdatedAt());
     }
 
     @Test
     @DisplayName("현재가가 없으면 예외가 발생한다.")
     void getCurrentStockPriceFailWhenNotFound() {
-        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.empty());
+        when(stockPriceRepository.findCurrentPriceWithSource("005930")).thenReturn(Optional.empty());
 
         InvestmentException exception = assertThrows(
                 InvestmentException.class,

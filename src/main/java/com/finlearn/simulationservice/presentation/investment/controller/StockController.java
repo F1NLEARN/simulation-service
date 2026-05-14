@@ -2,10 +2,9 @@ package com.finlearn.simulationservice.presentation.investment.controller;
 
 import com.finlearn.common.response.CommonResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
-import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
+import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
 import com.finlearn.simulationservice.application.investment.service.InvestmentService;
-import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -21,10 +20,16 @@ public class StockController {
     private final InvestmentService investmentService;
 
     @GetMapping
-    public CommonResponse<List<StockItemResponse>> getStockItems(
-            @RequestParam(required = false) String assetType
+    public CommonResponse<StockItemListResponse> getStockItems(
+            @RequestParam(required = false) String assetType,
+            @RequestParam(required = false) String keyword,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size
     ) {
-        return CommonResponse.success("종목 목록 조회 성공", investmentService.getStockItems(assetType));
+        return CommonResponse.success(
+                "종목 목록 조회 성공",
+                investmentService.getStockItems(assetType, keyword, page, size)
+        );
     }
 
     @GetMapping("/{stockCode}")

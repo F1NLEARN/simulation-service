@@ -5,8 +5,9 @@ import com.finlearn.simulationservice.application.investment.dto.request.Registe
 import com.finlearn.simulationservice.application.investment.dto.request.SellStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.response.FavoriteStockResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
-import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
+import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
+import com.finlearn.simulationservice.domain.investment.dto.ResolvedStockPrice;
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.SeedMoneyGrantHistory;
@@ -16,6 +17,7 @@ import com.finlearn.simulationservice.domain.investment.entity.StockTransaction;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
 import com.finlearn.simulationservice.domain.investment.enums.SeedMoneyGrantType;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.event.PointQuizPassedEvent;
 import com.finlearn.simulationservice.domain.investment.event.SeasonInvestmentAccountOpenedEvent;
 import com.finlearn.simulationservice.domain.investment.event.SeedMoneyGrantedEvent;
@@ -31,11 +33,14 @@ import com.finlearn.simulationservice.domain.investment.repository.StockPriceRep
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -106,10 +111,8 @@ public class InvestmentService {
         StockItem stockItem = stockItemRepository.findByStockCode(normalizeCode(request.instrumentCode()))
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND));
 
-        Long currentPrice = stockItem.getCurrentPrice();
-        if (currentPrice == null || currentPrice <= 0) {
-            throw new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND);
-        }
+        Long currentPrice = stockPriceRepository.findCurrentPrice(stockItem.getStockCode())
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND));
 
         StockTransaction transaction = account.buy(
                 stockItem.getStockCode(),
@@ -212,33 +215,89 @@ public class InvestmentService {
         favoriteStockRepository.delete(favoriteStock);
     }
 
-    public List<StockItemResponse> getStockItems(String assetType) {
+    public StockItemListResponse getStockItems(String assetType, String keyword, int page, int size) {
         StockAssetType filter = parseAssetType(assetType);
-        List<StockItem> stockItems = filter == null
-                ? stockItemRepository.findAllByCurrentPriceIsNotNullOrderByStockCodeAsc()
-                : stockItemRepository.findAllByAssetTypeAndCurrentPriceIsNotNullOrderByStockCodeAsc(filter);
+        String normalizedKeyword = normalizeKeyword(keyword);
+        PageRequest pageRequest = PageRequest.of(
+                normalizePage(page),
+                normalizeSize(size),
+                Sort.by(Sort.Direction.ASC, "stockCode")
+        );
 
-        return stockItems.stream()
-                .map(StockItemResponse::from)
-                .toList();
+        if (filter == null && normalizedKeyword == null) {
+            return StockItemListResponse.from(stockItemRepository.findAll(pageRequest));
+        }
+        if (filter != null && normalizedKeyword == null) {
+            return StockItemListResponse.from(stockItemRepository.findByAssetType(filter, pageRequest));
+        }
+        if (filter == null) {
+            return StockItemListResponse.from(stockItemRepository.searchStocksByKeyword(normalizedKeyword, pageRequest));
+        }
+        return StockItemListResponse.from(
+                stockItemRepository.searchStocksByAssetTypeAndKeyword(filter, normalizedKeyword, pageRequest)
+        );
     }
 
+    @Transactional
     public StockItemDetailResponse getStockItemDetail(String stockCode) {
         String normalizedStockCode = normalizeCode(stockCode);
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
-        return StockItemDetailResponse.from(stockItem);
+        ResolvedStockPrice resolvedPrice = resolveStockPriceAndCache(normalizedStockCode)
+                .orElse(new ResolvedStockPrice(
+                        normalizedStockCode,
+                        stockItem.getCurrentPrice() == null ? 0L : stockItem.getCurrentPrice(),
+                        stockItem.getCurrentPrice() == null ? null : StockPriceSource.DB_CACHE
+                ));
+        Long currentPrice = resolvedPrice.currentPrice() <= 0 ? null : resolvedPrice.currentPrice();
+        return StockItemDetailResponse.from(stockItem, currentPrice, resolvedPrice.source());
     }
 
+    @Transactional
     public StockPriceResponse getCurrentStockPrice(String stockCode) {
         String normalized = normalizeCode(stockCode);
-        long currentPrice = stockPriceRepository.findCurrentPrice(normalized)
+        ResolvedStockPrice resolvedPrice = resolveStockPriceAndCache(normalized)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND));
-        return new StockPriceResponse(normalized, currentPrice);
+        LocalDateTime cachedAt = stockItemRepository.findByStockCode(resolvedPrice.stockCode())
+                .map(StockItem::getCurrentPriceUpdatedAt)
+                .orElse(null);
+        return new StockPriceResponse(
+                resolvedPrice.stockCode(),
+                resolvedPrice.currentPrice(),
+                resolvedPrice.source(),
+                cachedAt
+        );
+    }
+
+    private Optional<ResolvedStockPrice> resolveStockPriceAndCache(String stockCode) {
+        Optional<ResolvedStockPrice> resolvedPrice = stockPriceRepository.findCurrentPriceWithSource(stockCode);
+        resolvedPrice
+                .filter(price -> price.source() == StockPriceSource.KIS)
+                .ifPresent(price -> stockItemRepository.findByStockCode(price.stockCode())
+                        .ifPresent(stockItem -> stockItem.updateCurrentPrice(price.currentPrice(), LocalDateTime.now())));
+        return resolvedPrice;
     }
 
     private String normalizeCode(String code) {
         return code == null ? null : code.trim().toUpperCase();
+    }
+
+    private String normalizeKeyword(String keyword) {
+        if (keyword == null || keyword.isBlank()) {
+            return null;
+        }
+        return keyword.trim();
+    }
+
+    private int normalizePage(int page) {
+        return Math.max(page, 0);
+    }
+
+    private int normalizeSize(int size) {
+        if (size <= 0) {
+            return 20;
+        }
+        return Math.min(size, 100);
     }
 
     private StockAssetType parseAssetType(String assetType) {

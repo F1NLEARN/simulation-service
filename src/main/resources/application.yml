@@ -15,10 +15,13 @@ spring:
       host: ${REDIS_HOST:localhost}
       port: ${REDIS_PORT:6379}
   datasource:
-    url: jdbc:postgresql://localhost:5432/simulationdb
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:simulationdb}
     driver-class-name: org.postgresql.Driver
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD:}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    hibernate:
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:update}
 
 eureka:
   instance:
@@ -36,3 +39,16 @@ openai:
   timeout:
     connect: 5000
     read: 30000
+external:
+  kis:
+    enabled: ${KIS_ENABLED:false}
+    base-url: ${KIS_BASE_URL:https://openapi.koreainvestment.com:9443}
+    token-path: ${KIS_TOKEN_PATH:/oauth2/tokenP}
+    price-path: ${KIS_PRICE_PATH:/uapi/domestic-stock/v1/quotations/inquire-price}
+    app-key: ${KIS_APP_KEY:}
+    app-secret: ${KIS_APP_SECRET:}
+    market-div-code: ${KIS_MARKET_DIV_CODE:J}
+
+stock-master:
+  seed:
+    enabled: ${STOCK_MASTER_SEED_ENABLED:true}

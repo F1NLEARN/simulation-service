@@ -10,6 +10,7 @@ import com.finlearn.simulationservice.domain.holding.repository.HoldingRepositor
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
+import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
@@ -18,6 +19,7 @@ import com.finlearn.simulationservice.domain.investment.repository.StockPriceRep
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
 import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
 import java.time.LocalDateTime;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -51,7 +53,7 @@ public class InvestmentOrderService {
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
-        Long currentPrice = stockPriceRepository.findCurrentPrice(normalizedStockCode)
+        Long currentPrice = resolveCurrentPriceAndCache(normalizedStockCode, stockItem)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
 
         long totalAmount = currentPrice * request.quantity();
@@ -116,7 +118,7 @@ public class InvestmentOrderService {
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
-        Long currentPrice = stockPriceRepository.findCurrentPrice(normalizedStockCode)
+        Long currentPrice = resolveCurrentPriceAndCache(normalizedStockCode, stockItem)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
 
         Holding holding = holdingRepository.findByAccountIdAndInstrumentCode(account.getAccountId(), normalizedStockCode)
@@ -168,5 +170,15 @@ public class InvestmentOrderService {
 
     private String normalizeStockCode(String stockCode) {
         return stockCode == null ? null : stockCode.trim().toUpperCase();
+    }
+
+    private Optional<Long> resolveCurrentPriceAndCache(String stockCode, StockItem stockItem) {
+        return stockPriceRepository.findCurrentPriceWithSource(stockCode)
+                .map(resolvedPrice -> {
+                    if (resolvedPrice.source() == StockPriceSource.KIS) {
+                        stockItem.updateCurrentPrice(resolvedPrice.currentPrice(), LocalDateTime.now());
+                    }
+                    return resolvedPrice.currentPrice();
+                });
     }
 }

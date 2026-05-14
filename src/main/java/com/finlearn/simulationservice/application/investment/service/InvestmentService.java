@@ -33,6 +33,7 @@ import com.finlearn.simulationservice.domain.investment.repository.StockPriceRep
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -229,10 +230,10 @@ public class InvestmentService {
             return StockItemListResponse.from(stockItemRepository.findByAssetType(filter, pageRequest));
         }
         if (filter == null) {
-            return StockItemListResponse.from(stockItemRepository.searchTradableStocksByKeyword(normalizedKeyword, pageRequest));
+            return StockItemListResponse.from(stockItemRepository.searchStocksByKeyword(normalizedKeyword, pageRequest));
         }
         return StockItemListResponse.from(
-                stockItemRepository.searchTradableStocksByAssetTypeAndKeyword(filter, normalizedKeyword, pageRequest)
+                stockItemRepository.searchStocksByAssetTypeAndKeyword(filter, normalizedKeyword, pageRequest)
         );
     }
 
@@ -241,7 +242,7 @@ public class InvestmentService {
         String normalizedStockCode = normalizeCode(stockCode);
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
-        ResolvedStockPrice resolvedPrice = stockPriceRepository.findCurrentPriceWithSource(normalizedStockCode)
+        ResolvedStockPrice resolvedPrice = resolveStockPriceAndCache(normalizedStockCode)
                 .orElse(new ResolvedStockPrice(
                         normalizedStockCode,
                         stockItem.getCurrentPrice() == null ? 0L : stockItem.getCurrentPrice(),
@@ -254,7 +255,7 @@ public class InvestmentService {
     @Transactional
     public StockPriceResponse getCurrentStockPrice(String stockCode) {
         String normalized = normalizeCode(stockCode);
-        ResolvedStockPrice resolvedPrice = stockPriceRepository.findCurrentPriceWithSource(normalized)
+        ResolvedStockPrice resolvedPrice = resolveStockPriceAndCache(normalized)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND));
         LocalDateTime cachedAt = stockItemRepository.findByStockCode(resolvedPrice.stockCode())
                 .map(StockItem::getCurrentPriceUpdatedAt)
@@ -265,6 +266,15 @@ public class InvestmentService {
                 resolvedPrice.source(),
                 cachedAt
         );
+    }
+
+    private Optional<ResolvedStockPrice> resolveStockPriceAndCache(String stockCode) {
+        Optional<ResolvedStockPrice> resolvedPrice = stockPriceRepository.findCurrentPriceWithSource(stockCode);
+        resolvedPrice
+                .filter(price -> price.source() == StockPriceSource.KIS)
+                .ifPresent(price -> stockItemRepository.findByStockCode(price.stockCode())
+                        .ifPresent(stockItem -> stockItem.updateCurrentPrice(price.currentPrice(), LocalDateTime.now())));
+        return resolvedPrice;
     }
 
     private String normalizeCode(String code) {

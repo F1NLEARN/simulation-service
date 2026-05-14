@@ -5,11 +5,9 @@ import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
 import com.finlearn.simulationservice.infrastructure.investment.client.KisStockPriceClient;
-import java.time.LocalDateTime;
 import java.util.Optional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Repository;
-import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 @RequiredArgsConstructor
@@ -19,7 +17,6 @@ public class StockPriceRepositoryImpl implements StockPriceRepository {
     private final KisStockPriceClient kisStockPriceClient;
 
     @Override
-    @Transactional
     public Optional<ResolvedStockPrice> findCurrentPriceWithSource(String instrumentCode) {
         if (instrumentCode == null || instrumentCode.isBlank()) {
             return Optional.empty();
@@ -28,10 +25,7 @@ public class StockPriceRepositoryImpl implements StockPriceRepository {
 
         Optional<Long> livePrice = kisStockPriceClient.findCurrentPrice(normalized);
         if (livePrice.isPresent()) {
-            long price = livePrice.get();
-            stockItemRepository.findByStockCode(normalized)
-                    .ifPresent(stockItem -> stockItem.updateCurrentPrice(price, LocalDateTime.now()));
-            return Optional.of(new ResolvedStockPrice(normalized, price, StockPriceSource.KIS));
+            return Optional.of(new ResolvedStockPrice(normalized, livePrice.get(), StockPriceSource.KIS));
         }
 
         // KIS 설정이 없거나 외부 API 조회가 실패하면 MVP용 DB 적재값을 fallback으로 사용한다.

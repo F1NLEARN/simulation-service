@@ -46,6 +46,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
@@ -515,7 +516,7 @@ class InvestmentServiceTest {
     void getStockItemsWithKeyword() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
         PageRequest pageRequest = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "stockCode"));
-        when(stockItemRepository.searchTradableStocksByAssetTypeAndKeyword(StockAssetType.STOCK, "삼성", pageRequest))
+        when(stockItemRepository.searchStocksByAssetTypeAndKeyword(StockAssetType.STOCK, "삼성", pageRequest))
                 .thenReturn(new PageImpl<>(List.of(stockItem), pageRequest, 21));
 
         StockItemListResponse result = investmentService.getStockItems("STOCK", "  삼성  ", 1, 10);
@@ -550,6 +551,22 @@ class InvestmentServiceTest {
         assertEquals("005930", response.stockCode());
         assertEquals(73500L, response.currentPrice());
         assertEquals(StockPriceSource.KIS, response.source());
+    }
+
+    @Test
+    @DisplayName("KIS 현재가 조회 성공 시 종목 마스터의 캐시 가격을 갱신한다.")
+    void getCurrentStockPriceUpdateCacheWhenKisPriceResolved() {
+        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 70000L);
+        when(stockPriceRepository.findCurrentPriceWithSource("005930"))
+                .thenReturn(Optional.of(new ResolvedStockPrice("005930", 73500L, StockPriceSource.KIS)));
+        when(stockItemRepository.findByStockCode("005930"))
+                .thenReturn(Optional.of(stockItem));
+
+        StockPriceResponse response = investmentService.getCurrentStockPrice("005930");
+
+        assertEquals(73500L, response.currentPrice());
+        assertEquals(73500L, stockItem.getCurrentPrice());
+        assertNotNull(stockItem.getCurrentPriceUpdatedAt());
     }
 
     @Test

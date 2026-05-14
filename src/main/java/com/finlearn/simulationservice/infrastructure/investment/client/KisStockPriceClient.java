@@ -97,8 +97,12 @@ public class KisStockPriceClient {
             return Optional.empty();
         }
 
-        long price = Long.parseLong(rawPrice.replace(",", ""));
-        return price > 0 ? Optional.of(price) : Optional.empty();
+        try {
+            long price = Long.parseLong(rawPrice.replace(",", ""));
+            return price > 0 ? Optional.of(price) : Optional.empty();
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
     }
 
     private record KisTokenRequest(

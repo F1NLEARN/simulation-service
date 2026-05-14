@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -48,20 +49,16 @@ class StockPriceRepositoryImplTest {
     }
 
     @Test
-    @DisplayName("KIS 현재가를 조회할 수 있으면 종목 마스터의 캐시 가격을 갱신한다.")
+    @DisplayName("KIS 현재가를 조회할 수 있으면 DB 조회 없이 KIS 가격을 반환한다.")
     void findCurrentPricePreferKisPrice() {
-        StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 73500L);
         when(kisStockPriceClient.findCurrentPrice("005930")).thenReturn(Optional.of(74000L));
-        when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
 
         Optional<ResolvedStockPrice> result = stockPriceRepository.findCurrentPriceWithSource("005930");
 
         assertTrue(result.isPresent());
         assertEquals(74000L, result.get().currentPrice());
         assertEquals(StockPriceSource.KIS, result.get().source());
-        assertEquals(74000L, stockItem.getCurrentPrice());
-        assertTrue(stockItem.getCurrentPriceUpdatedAt() != null);
-        verify(stockItemRepository).findByStockCode("005930");
+        verify(stockItemRepository, never()).findByStockCode("005930");
     }
 
     @Test

@@ -43,9 +43,9 @@ Spring's `SPRING_DATASOURCE_*` variables override values from Config Server.
 Start `config-server` with the native backend:
 
 ```bash
-cd /Users/seongjun/Desktop/spartacoding/finlearn/config-server
+cd ../config-server
 
-CONFIG_LOCAL_REPO_PATH=/Users/seongjun/Desktop/spartacoding/finlearn/configs \
+CONFIG_LOCAL_REPO_PATH="$(cd ../configs && pwd)" \
 SPRING_PROFILES_ACTIVE=native \
 sh gradlew bootRun
 ```
@@ -53,7 +53,7 @@ sh gradlew bootRun
 Then run simulation-service with DB variables:
 
 ```bash
-cd /Users/seongjun/Desktop/spartacoding/finlearn/simulation-service
+cd ../simulation-service
 
 DB_HOST=localhost \
 DB_PORT=5432 \

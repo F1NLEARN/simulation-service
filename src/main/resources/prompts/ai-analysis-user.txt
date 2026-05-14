@@ -1,0 +1,8 @@
+포트폴리오 진단 결과:
+- 집중도: {concentrationLevel}
+- 리스크 등급: {riskLevel}
+- 요약: {analysisSummary}
+- 경고: {warnings}
+
+재작성할 추천 목록 (구조 변경 금지):
+{recommendations}

@@ -94,8 +94,7 @@ public class PortfolioAnalysisQueryService {
     private List<PortfolioRecommendation> resolveRecommendations(
             UUID accountId, List<PortfolioRecommendation> ruleBasedRecommendations) {
         return aiAnalysisRepository
-                .findTopByAccountIdOrderByAnalyzedAtDesc(accountId)
-                .filter(a -> a.getAnalysisStatus() == AnalysisStatus.COMPLETED)
+                .findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(accountId, AnalysisStatus.COMPLETED)
                 .map(a -> {
                     try {
                         JsonNode node = objectMapper.readTree(a.getAiFeedbackMessage());

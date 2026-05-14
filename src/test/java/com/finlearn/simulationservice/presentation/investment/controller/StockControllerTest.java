@@ -2,12 +2,15 @@ package com.finlearn.simulationservice.presentation.investment.controller;
 
 import com.finlearn.common.exception.GlobalExceptionAdviceImpl;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
+import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
 import com.finlearn.simulationservice.application.investment.service.InvestmentService;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +30,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @ExtendWith(MockitoExtension.class)
 class StockControllerTest {
+
+    private static final LocalDateTime PRICE_UPDATED_AT = LocalDateTime.of(2026, 5, 12, 12, 0);
 
     @Mock
     private InvestmentService investmentService;
@@ -50,6 +55,8 @@ class StockControllerTest {
                 "삼성전자",
                 StockAssetType.STOCK,
                 73500L,
+                StockPriceSource.DB_CACHE,
+                PRICE_UPDATED_AT,
                 true
         );
         StockItemResponse second = new StockItemResponse(
@@ -58,27 +65,64 @@ class StockControllerTest {
                 "KODEX 200",
                 StockAssetType.ETF,
                 35000L,
+                StockPriceSource.DB_CACHE,
+                PRICE_UPDATED_AT,
                 true
         );
-        when(investmentService.getStockItems(null)).thenReturn(List.of(first, second));
+        StockItemListResponse response = new StockItemListResponse(List.of(first, second), 0, 20, 2, 1, false);
+        when(investmentService.getStockItems(null, null, 0, 20)).thenReturn(response);
 
         mockMvc.perform(get("/api/v1/investments/stocks"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("종목 목록 조회 성공"))
-                .andExpect(jsonPath("$.data[0].name").value("삼성전자"))
-                .andExpect(jsonPath("$.data[0].stockCode").value("005930"))
-                .andExpect(jsonPath("$.data[0].assetType").value("STOCK"))
-                .andExpect(jsonPath("$.data[0].currentPrice").value(73500))
-                .andExpect(jsonPath("$.data[0].tradable").value(true))
-                .andExpect(jsonPath("$.data[1].assetType").value("ETF"));
+                .andExpect(jsonPath("$.data.items[0].name").value("삼성전자"))
+                .andExpect(jsonPath("$.data.items[0].stockCode").value("005930"))
+                .andExpect(jsonPath("$.data.items[0].assetType").value("STOCK"))
+                .andExpect(jsonPath("$.data.items[0].currentPrice").value(73500))
+                .andExpect(jsonPath("$.data.items[0].tradable").value(true))
+                .andExpect(jsonPath("$.data.items[1].assetType").value("ETF"))
+                .andExpect(jsonPath("$.data.page").value(0))
+                .andExpect(jsonPath("$.data.size").value(20))
+                .andExpect(jsonPath("$.data.totalElements").value(2))
+                .andExpect(jsonPath("$.data.totalPages").value(1))
+                .andExpect(jsonPath("$.data.hasNext").value(false));
+    }
+
+    @Test
+    @DisplayName("종목 목록 조회 API는 자산유형/키워드/페이징 파라미터를 전달한다.")
+    void getStockItemsWithSearchAndPaging() throws Exception {
+        StockItemResponse item = new StockItemResponse(
+                UUID.randomUUID(),
+                "005930",
+                "삼성전자",
+                StockAssetType.STOCK,
+                73500L,
+                StockPriceSource.DB_CACHE,
+                PRICE_UPDATED_AT,
+                true
+        );
+        StockItemListResponse response = new StockItemListResponse(List.of(item), 1, 10, 21, 3, true);
+        when(investmentService.getStockItems("STOCK", "삼성", 1, 10)).thenReturn(response);
+
+        mockMvc.perform(get("/api/v1/investments/stocks")
+                        .param("assetType", "STOCK")
+                        .param("keyword", "삼성")
+                        .param("page", "1")
+                        .param("size", "10"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].stockCode").value("005930"))
+                .andExpect(jsonPath("$.data.page").value(1))
+                .andExpect(jsonPath("$.data.size").value(10))
+                .andExpect(jsonPath("$.data.totalElements").value(21))
+                .andExpect(jsonPath("$.data.hasNext").value(true));
     }
 
     @Test
     @DisplayName("지원하지 않는 자산유형이면 공통 예외 포맷으로 반환한다.")
     void getStockItemsFailWhenInvalidAssetType() throws Exception {
         doThrow(new InvestmentException(InvestmentErrorCode.INVALID_ASSET_TYPE))
-                .when(investmentService).getStockItems("CRYPTO");
+                .when(investmentService).getStockItems("CRYPTO", null, 0, 20);
 
         mockMvc.perform(get("/api/v1/investments/stocks").param("assetType", "CRYPTO"))
                 .andExpect(status().isBadRequest())
@@ -95,6 +139,8 @@ class StockControllerTest {
                 "삼성전자",
                 StockAssetType.STOCK,
                 73500L,
+                StockPriceSource.DB_CACHE,
+                PRICE_UPDATED_AT,
                 true
         );
         when(investmentService.getStockItemDetail("005930")).thenReturn(response);
@@ -125,14 +171,15 @@ class StockControllerTest {
     @DisplayName("현재가 조회 API는 종목코드 기준 현재가를 반환한다.")
     void getCurrentStockPrice() throws Exception {
         when(investmentService.getCurrentStockPrice("005930"))
-                .thenReturn(new StockPriceResponse("005930", 73500L));
+                .thenReturn(new StockPriceResponse("005930", 73500L, StockPriceSource.KIS, PRICE_UPDATED_AT));
 
         mockMvc.perform(get("/api/v1/investments/stocks/005930/price"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.success").value(true))
                 .andExpect(jsonPath("$.message").value("현재가 조회 성공"))
                 .andExpect(jsonPath("$.data.stockCode").value("005930"))
-                .andExpect(jsonPath("$.data.currentPrice").value(73500));
+                .andExpect(jsonPath("$.data.currentPrice").value(73500))
+                .andExpect(jsonPath("$.data.source").value("KIS"));
     }
 
     @Test

@@ -11,6 +11,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Builder;
@@ -45,12 +46,17 @@ public class StockItem extends BaseEntity {
     @Column(name = "current_price")
     private Long currentPrice;
 
+    @Column(name = "current_price_updated_at")
+    private LocalDateTime currentPriceUpdatedAt;
+
     @Builder
-    private StockItem(String stockName, String stockCode, StockAssetType assetType, Long currentPrice) {
+    private StockItem(String stockName, String stockCode, StockAssetType assetType, Long currentPrice,
+                      LocalDateTime currentPriceUpdatedAt) {
         this.stockName = stockName;
         this.stockCode = stockCode;
         this.assetType = assetType;
         this.currentPrice = currentPrice;
+        this.currentPriceUpdatedAt = currentPriceUpdatedAt;
     }
 
     public static StockItem create(String stockName, String stockCode, StockAssetType assetType) {
@@ -63,6 +69,12 @@ public class StockItem extends BaseEntity {
                 .stockCode(stockCode)
                 .assetType(assetType)
                 .currentPrice(currentPrice)
+                .currentPriceUpdatedAt(currentPrice == null ? null : LocalDateTime.now())
                 .build();
+    }
+
+    public void updateCurrentPrice(long currentPrice, LocalDateTime updatedAt) {
+        this.currentPrice = currentPrice;
+        this.currentPriceUpdatedAt = updatedAt;
     }
 }

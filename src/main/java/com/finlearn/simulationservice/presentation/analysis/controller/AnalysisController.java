@@ -40,10 +40,8 @@ public class AnalysisController {
             @RequestHeader("X-User-Id") String userIdHeader
     ) {
         UUID investorId = InvestmentUserIdHeaderParser.parse(userIdHeader);
-        portfolioAnalysisQueryService.evictCache(investorId);
-        PortfolioAnalysisResponse response = portfolioAnalysisQueryService
-                .getPortfolioAnalysis(new GetPortfolioAnalysisQuery(investorId));
-        return CommonResponse.success("포트폴리오 분석 갱신 성공", response);
+        return CommonResponse.success("포트폴리오 분석 갱신 성공",
+                portfolioAnalysisQueryService.refresh(investorId));
     }
 
     @GetMapping("/portfolio/history")

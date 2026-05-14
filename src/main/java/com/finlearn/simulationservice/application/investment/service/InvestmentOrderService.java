@@ -44,7 +44,7 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
+        InvestmentAccount account = investmentAccountRepository.findByInvestorIdAndStatusForUpdate(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         String normalizedStockCode = normalizeStockCode(request.stockCode());
@@ -109,7 +109,7 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
+        InvestmentAccount account = investmentAccountRepository.findByInvestorIdAndStatusForUpdate(userId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         String normalizedStockCode = normalizeStockCode(request.stockCode());

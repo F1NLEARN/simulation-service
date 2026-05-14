@@ -1,8 +1,11 @@
 package com.finlearn.simulationservice.infrastructure.investment.repository;
 
+import com.finlearn.simulationservice.domain.investment.dto.ResolvedStockPrice;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
+import com.finlearn.simulationservice.infrastructure.investment.client.KisStockPriceClient;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -13,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,6 +26,9 @@ class StockPriceRepositoryImplTest {
     @Mock
     private StockItemRepository stockItemRepository;
 
+    @Mock
+    private KisStockPriceClient kisStockPriceClient;
+
     @InjectMocks
     private StockPriceRepositoryImpl stockPriceRepository;
 
@@ -29,22 +36,39 @@ class StockPriceRepositoryImplTest {
     @DisplayName("종목코드로 현재가를 조회할 수 있다.")
     void findCurrentPriceSuccess() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, 73500L);
+        when(kisStockPriceClient.findCurrentPrice("005930")).thenReturn(Optional.empty());
         when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
 
-        Optional<Long> result = stockPriceRepository.findCurrentPrice("005930");
+        Optional<ResolvedStockPrice> result = stockPriceRepository.findCurrentPriceWithSource("005930");
 
         assertTrue(result.isPresent());
-        assertEquals(73500L, result.get());
+        assertEquals(73500L, result.get().currentPrice());
+        assertEquals(StockPriceSource.DB_FALLBACK, result.get().source());
+        verify(kisStockPriceClient).findCurrentPrice("005930");
         verify(stockItemRepository).findByStockCode("005930");
+    }
+
+    @Test
+    @DisplayName("KIS 현재가를 조회할 수 있으면 DB 조회 없이 KIS 가격을 반환한다.")
+    void findCurrentPricePreferKisPrice() {
+        when(kisStockPriceClient.findCurrentPrice("005930")).thenReturn(Optional.of(74000L));
+
+        Optional<ResolvedStockPrice> result = stockPriceRepository.findCurrentPriceWithSource("005930");
+
+        assertTrue(result.isPresent());
+        assertEquals(74000L, result.get().currentPrice());
+        assertEquals(StockPriceSource.KIS, result.get().source());
+        verify(stockItemRepository, never()).findByStockCode("005930");
     }
 
     @Test
     @DisplayName("현재가가 null이면 empty를 반환한다.")
     void findCurrentPriceEmptyWhenPriceIsNull() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK, null);
+        when(kisStockPriceClient.findCurrentPrice("005930")).thenReturn(Optional.empty());
         when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
 
-        Optional<Long> result = stockPriceRepository.findCurrentPrice("005930");
+        Optional<ResolvedStockPrice> result = stockPriceRepository.findCurrentPriceWithSource("005930");
 
         assertTrue(result.isEmpty());
     }

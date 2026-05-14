@@ -1,10 +1,16 @@
 package com.finlearn.simulationservice.application.analysis.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAllocationResponse;
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAnalysisResponse;
 import com.finlearn.simulationservice.application.analysis.query.GetPortfolioAnalysisQuery;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
+import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
 import com.finlearn.simulationservice.domain.analysis.service.PortfolioAnalysisDomainService;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
@@ -25,6 +31,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
@@ -37,15 +44,35 @@ public class PortfolioAnalysisQueryService {
     private final HoldingRepository holdingRepository;
     private final StockItemRepository stockItemRepository;
     private final PortfolioAnalysisDomainService portfolioAnalysisDomainService;
+    private final AiAnalysisRepository aiAnalysisRepository;
+    private final AiAnalysisService aiAnalysisService;
+    private final ObjectMapper objectMapper;
 
     @Cacheable(value = "portfolioAnalysis", key = "#query.investorId")
     public PortfolioAnalysisResponse getPortfolioAnalysis(GetPortfolioAnalysisQuery query) {
+        PortfolioAnalysisData data = computePortfolioData(query.investorId());
+        List<PortfolioRecommendation> resolvedRecommendations =
+                resolveRecommendations(data.account().getAccountId(), data.diagnosis().recommendations());
+        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(), resolvedRecommendations);
+    }
+
+    @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
+    public PortfolioAnalysisResponse refresh(UUID investorId) {
+        PortfolioAnalysisData data = computePortfolioData(investorId);
+        aiAnalysisService.createAsync(data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations());
+        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(), data.diagnosis().recommendations());
+    }
+
+    @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
+    public void evictCache(UUID investorId) {
+    }
+
+    private PortfolioAnalysisData computePortfolioData(UUID investorId) {
         InvestmentAccount account = investmentAccountRepository
-                .findByParticipant_InvestorIdAndStatus(query.investorId(), InvestmentAccountStatus.ACTIVE)
+                .findByParticipant_InvestorIdAndStatus(investorId, InvestmentAccountStatus.ACTIVE)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         List<Holding> holdings = holdingRepository.findAllWithFilter(account.getAccountId(), null);
-
         PortfolioAllocationResponse allocation = buildAllocation(account, holdings);
 
         long totalBuyAmount = holdings.stream().mapToLong(Holding::getTotalBuyAmount).sum();
@@ -61,11 +88,26 @@ public class PortfolioAnalysisQueryService {
                 allocation.topHoldingWeight(), holdings.size(),
                 allocation.cashWeight(), holdingsReturnRate, allocation.etfWeight());
 
-        return PortfolioAnalysisResponse.of(account, holdings, allocation, diagnosis);
+        return new PortfolioAnalysisData(account, holdings, allocation, diagnosis);
     }
 
-    @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
-    public void evictCache(UUID investorId) {
+    private List<PortfolioRecommendation> resolveRecommendations(
+            UUID accountId, List<PortfolioRecommendation> ruleBasedRecommendations) {
+        return aiAnalysisRepository
+                .findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(accountId, AnalysisStatus.COMPLETED)
+                .map(a -> {
+                    try {
+                        JsonNode node = objectMapper.readTree(a.getAiFeedbackMessage());
+                        return objectMapper.<List<PortfolioRecommendation>>convertValue(
+                                node,
+                                new TypeReference<List<PortfolioRecommendation>>() {}
+                        );
+                    } catch (Exception e) {
+                        return null;
+                    }
+                })
+                .filter(Objects::nonNull)
+                .orElse(ruleBasedRecommendations);
     }
 
     private PortfolioAllocationResponse buildAllocation(InvestmentAccount account, List<Holding> holdings) {
@@ -122,4 +164,11 @@ public class PortfolioAnalysisQueryService {
 
         return new PortfolioAllocationResponse(stockWeight, etfWeight, cashWeight, topHoldingWeight, holdings.size());
     }
+
+    private record PortfolioAnalysisData(
+            InvestmentAccount account,
+            List<Holding> holdings,
+            PortfolioAllocationResponse allocation,
+            PortfolioDiagnosis diagnosis
+    ) {}
 }

@@ -1,6 +1,7 @@
 package com.finlearn.simulationservice.application.analysis.dto.response;
 
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 
@@ -19,7 +20,8 @@ public record PortfolioAnalysisResponse(
 ) {
     public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings,
                                                PortfolioAllocationResponse allocation,
-                                               PortfolioDiagnosis diagnosis) {
+                                               PortfolioDiagnosis diagnosis,
+                                               List<PortfolioRecommendation> recommendations) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
                 .sum();
@@ -50,7 +52,7 @@ public record PortfolioAnalysisResponse(
                 account.getTotalAssetAmount(), totalProfitLoss, totalReturnRate
         );
 
-        List<PortfolioRecommendationResponse> recommendationResponses = diagnosis.recommendations().stream()
+        List<PortfolioRecommendationResponse> recommendationResponses = recommendations.stream()
                 .map(PortfolioRecommendationResponse::from)
                 .toList();
 

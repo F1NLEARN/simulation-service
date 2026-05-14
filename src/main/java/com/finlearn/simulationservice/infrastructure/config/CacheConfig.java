@@ -1,4 +1,4 @@
-package com.finlearn.simulationservice.config;
+package com.finlearn.simulationservice.infrastructure.config;
 
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;

@@ -1,0 +1,260 @@
+package com.finlearn.simulationservice.application.analysis.service;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAllocationResponse;
+import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
+import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
+import com.finlearn.simulationservice.domain.analysis.vo.ConcentrationLevel;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
+import com.finlearn.simulationservice.domain.analysis.vo.RecommendationType;
+import com.finlearn.simulationservice.domain.analysis.vo.RiskLevel;
+import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
+import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
+import com.finlearn.simulationservice.infrastructure.openai.OpenAiClient;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.cache.Cache;
+import org.springframework.cache.CacheManager;
+import org.springframework.test.util.ReflectionTestUtils;
+
+import java.math.BigDecimal;
+import java.util.List;
+import java.util.UUID;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class AiAnalysisServiceTest {
+
+    @Mock
+    private AiAnalysisRepository aiAnalysisRepository;
+
+    @Mock
+    private OpenAiClient openAiClient;
+
+    @Mock
+    private CacheManager cacheManager;
+
+    private AiAnalysisService aiAnalysisService;
+
+    private static final UUID ACCOUNT_ID = UUID.randomUUID();
+    private static final UUID INVESTOR_ID = UUID.randomUUID();
+    private static final UUID SEASON_ID = UUID.randomUUID();
+
+    private InvestmentAccount account;
+    private PortfolioDiagnosis diagnosis;
+    private PortfolioAllocationResponse allocation;
+    private List<PortfolioRecommendation> ruleBasedRecommendations;
+
+    @BeforeEach
+    void setUp() {
+        aiAnalysisService = new AiAnalysisService(aiAnalysisRepository, openAiClient, new ObjectMapper(), cacheManager);
+        ReflectionTestUtils.setField(aiAnalysisService, "systemPrompt", "금융 전문가 시스템 프롬프트 (테스트용)");
+        ReflectionTestUtils.setField(aiAnalysisService, "userPromptTemplate",
+                "집중도: {concentrationLevel}, 리스크: {riskLevel}, 요약: {analysisSummary}, 경고: {warnings}\n{recommendations}");
+
+        account = InvestmentAccount.open(
+                new SeasonParticipant(INVESTOR_ID, "테스터", SEASON_ID, 1),
+                10_000_000L
+        );
+        ReflectionTestUtils.setField(account, "accountId", ACCOUNT_ID);
+
+        ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(RecommendationType.PORTFOLIO, null, "집중도 높음", "분산 투자 권장"),
+                new PortfolioRecommendation(RecommendationType.QUIZ, "DOMESTIC_ETF", "ETF 비중 낮음", "ETF 학습 권장")
+        );
+
+        diagnosis = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH, RiskLevel.AGGRESSIVE,
+                "단일 종목 집중도가 높습니다.", List.of("집중도 위험"), ruleBasedRecommendations
+        );
+
+        allocation = new PortfolioAllocationResponse(
+                new BigDecimal("86.00"), BigDecimal.ZERO,
+                new BigDecimal("14.00"), new BigDecimal("86.00"), 1
+        );
+    }
+
+    @Test
+    @DisplayName("OpenAI 응답 성공 시 COMPLETED 상태로 저장되고 캐시가 무효화된다.")
+    void createAsync_success_savesCompletedAnalysisAndEvictsCache() {
+        String aiResponse = """
+                {
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "AI가 재작성한 이유",
+                      "message": "AI가 재작성한 메시지"
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "DOMESTIC_ETF",
+                      "reason": "AI ETF 이유",
+                      "message": "AI ETF 메시지"
+                    }
+                  ]
+                }""";
+
+        Cache mockCache = mock(Cache.class);
+        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+        verify(mockCache).evict(INVESTOR_ID);
+
+        AiAnalysis saved = captor.getValue();
+        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.COMPLETED);
+        assertThat(saved.getAiFeedbackMessage()).contains("AI가 재작성한 이유");
+        assertThat(saved.getAccountId()).isEqualTo(ACCOUNT_ID);
+        assertThat(saved.getFailureReason()).isNull();
+    }
+
+    @Test
+    @DisplayName("성공 시 원본 recommendationType, targetCategory를 유지하고 AI의 reason, message만 병합한다.")
+    void createAsync_success_mergesOnlyReasonAndMessage() throws Exception {
+        // AI가 순서와 타입을 바꿔서 반환하더라도, 원본의 recommendationType/targetCategory가 유지되어야 함
+        String aiResponse = """
+                {
+                  "recommendations": [
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "FOREIGN_ETF",
+                      "reason": "AI가 재작성한 이유",
+                      "message": "AI가 재작성한 메시지"
+                    },
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "AI ETF 이유",
+                      "message": "AI ETF 메시지"
+                    }
+                  ]
+                }""";
+
+        Cache mockCache = mock(Cache.class);
+        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+
+        String savedJson = captor.getValue().getAiFeedbackMessage();
+        // 원본 recommendationType, targetCategory 유지 확인
+        assertThat(savedJson).contains("PORTFOLIO");
+        assertThat(savedJson).contains("DOMESTIC_ETF");
+        // AI의 reason, message 적용 확인
+        assertThat(savedJson).contains("AI가 재작성한 이유");
+        assertThat(savedJson).contains("AI ETF 이유");
+        // AI가 반환한 FOREIGN_ETF는 저장되지 않아야 함
+        assertThat(savedJson).doesNotContain("FOREIGN_ETF");
+    }
+
+    @Test
+    @DisplayName("OpenAI 호출 실패 시 FAILED 상태로 저장된다.")
+    void createAsync_openAiError_savesFailedAnalysis() {
+        when(openAiClient.call(anyString(), anyString())).thenThrow(new RuntimeException("API timeout"));
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+
+        AiAnalysis saved = captor.getValue();
+        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
+        assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
+        assertThat(saved.getFailureReason()).isEqualTo("API timeout");
+    }
+
+    @Test
+    @DisplayName("AI 응답 항목 수가 룰 기반과 다르면 FAILED 상태로 저장된다.")
+    void createAsync_countMismatch_savesFailedAnalysis() {
+        String mismatchedResponse = """
+                {
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "이유",
+                      "message": "메시지"
+                    }
+                  ]
+                }""";
+
+        when(openAiClient.call(anyString(), anyString())).thenReturn(mismatchedResponse);
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+
+        AiAnalysis saved = captor.getValue();
+        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
+        assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
+        assertThat(saved.getFailureReason()).contains("AI 응답 항목 수 불일치");
+    }
+
+    @Test
+    @DisplayName("AI 응답 JSON 파싱 실패 시 FAILED 상태로 저장된다.")
+    void createAsync_invalidJson_savesFailedAnalysis() {
+        when(openAiClient.call(anyString(), anyString())).thenReturn("invalid json");
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+
+        AiAnalysis saved = captor.getValue();
+        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
+        assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
+    }
+
+    @Test
+    @DisplayName("성공 시 QUIZ 타입 recommendations의 첫 번째 targetCategory가 추천 학습 주제로 저장된다.")
+    void createAsync_success_setsRecommendedLearningTopicFromQuiz() {
+        String aiResponse = """
+                {
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "이유1",
+                      "message": "메시지1"
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "DOMESTIC_ETF",
+                      "reason": "이유2",
+                      "message": "메시지2"
+                    }
+                  ]
+                }""";
+
+        Cache mockCache = mock(Cache.class);
+        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
+
+        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+
+        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
+        verify(aiAnalysisRepository).save(captor.capture());
+
+        assertThat(captor.getValue().getRecommendedLearningTopic()).isEqualTo("DOMESTIC_ETF");
+    }
+}

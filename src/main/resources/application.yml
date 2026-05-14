@@ -32,6 +32,13 @@ eureka:
     service-url:
       defaultZone: http://localhost:8761/eureka/
 
+openai:
+  api-key: ${OPENAI_API_KEY}
+  base-url: https://api.openai.com/v1
+  model: gpt-4o-mini
+  timeout:
+    connect: 5000
+    read: 30000
 external:
   kis:
     enabled: ${KIS_ENABLED:false}

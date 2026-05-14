@@ -1,10 +1,17 @@
 package com.finlearn.simulationservice.application.analysis.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAnalysisResponse;
 import com.finlearn.simulationservice.application.analysis.query.GetPortfolioAnalysisQuery;
+import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
+import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
+import com.finlearn.simulationservice.domain.analysis.entity.AnalysisType;
+import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
 import com.finlearn.simulationservice.domain.analysis.service.PortfolioAnalysisDomainService;
 import com.finlearn.simulationservice.domain.analysis.vo.ConcentrationLevel;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
+import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
+import com.finlearn.simulationservice.domain.analysis.vo.RecommendationType;
 import com.finlearn.simulationservice.domain.analysis.vo.RiskLevel;
 import com.finlearn.simulationservice.domain.holding.command.CreateHoldingCommand;
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
@@ -17,15 +24,16 @@ import com.finlearn.simulationservice.domain.investment.exception.InvestmentExce
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,7 +59,12 @@ class PortfolioAnalysisQueryServiceTest {
     @Mock
     private PortfolioAnalysisDomainService portfolioAnalysisDomainService;
 
-    @InjectMocks
+    @Mock
+    private AiAnalysisRepository aiAnalysisRepository;
+
+    @Mock
+    private AiAnalysisService aiAnalysisService;
+
     private PortfolioAnalysisQueryService portfolioAnalysisQueryService;
 
     private static final PortfolioDiagnosis STUB_DIAGNOSIS = new PortfolioDiagnosis(
@@ -61,6 +74,19 @@ class PortfolioAnalysisQueryServiceTest {
     private static final UUID INVESTOR_ID = UUID.randomUUID();
     private static final UUID ACCOUNT_ID = UUID.randomUUID();
     private static final UUID SEASON_ID = UUID.randomUUID();
+
+    @BeforeEach
+    void setUp() {
+        portfolioAnalysisQueryService = new PortfolioAnalysisQueryService(
+                investmentAccountRepository,
+                holdingRepository,
+                stockItemRepository,
+                portfolioAnalysisDomainService,
+                aiAnalysisRepository,
+                aiAnalysisService,
+                new ObjectMapper()
+        );
+    }
 
     private InvestmentAccount createActiveAccount() {
         InvestmentAccount account = InvestmentAccount.open(
@@ -87,6 +113,7 @@ class PortfolioAnalysisQueryServiceTest {
                 .thenReturn(Optional.of(account));
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -107,9 +134,6 @@ class PortfolioAnalysisQueryServiceTest {
     @Test
     @DisplayName("단일 보유 종목의 평가 금액, 손익, 수익률을 올바르게 계산한다.")
     void getPortfolioAnalysis_singleHolding_calculatesMetricsCorrectly() {
-        // 10주 @ 매수 75,000원, 현재 80,000원
-        // totalBuyAmount = 750,000, valuationAmount = 800,000, profitLoss = 50,000
-        // returnRate = 50,000 / 750,000 * 100 ≈ 6.67%
         InvestmentAccount account = createActiveAccount();
         Holding holding = createHolding("005930", "삼성전자", 10L, 75_000L, 80_000L);
 
@@ -118,6 +142,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -133,9 +158,6 @@ class PortfolioAnalysisQueryServiceTest {
     @Test
     @DisplayName("복수 보유 종목의 합산 지표를 올바르게 계산한다.")
     void getPortfolioAnalysis_multipleHoldings_sumsTotalsCorrectly() {
-        // 종목A: 10주 @ 10,000원, 현재 12,000원 → buy=100,000, val=120,000
-        // 종목B: 5주 @ 20,000원, 현재 18,000원 → buy=100,000, val=90,000
-        // total buy=200,000, total val=210,000, profit=10,000, rate=5%
         InvestmentAccount account = createActiveAccount();
         Holding holdingA = createHolding("A001", "종목A", 10L, 10_000L, 12_000L);
         Holding holdingB = createHolding("B001", "종목B", 5L, 20_000L, 18_000L);
@@ -145,6 +167,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -159,8 +182,6 @@ class PortfolioAnalysisQueryServiceTest {
     @Test
     @DisplayName("종목별 포트폴리오 비중을 올바르게 계산하고 합계가 100%이다.")
     void getPortfolioAnalysis_multipleHoldings_calculatesWeightsCorrectly() {
-        // 종목A: val=300,000 → 비중 75%
-        // 종목B: val=100,000 → 비중 25%
         InvestmentAccount account = createActiveAccount();
         Holding holdingA = createHolding("A001", "종목A", 3L, 100_000L, 100_000L);
         Holding holdingB = createHolding("B001", "종목B", 1L, 100_000L, 100_000L);
@@ -170,6 +191,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -187,7 +209,6 @@ class PortfolioAnalysisQueryServiceTest {
     @Test
     @DisplayName("현재가 하락 시 손실이 분석 결과에 반영된다.")
     void getPortfolioAnalysis_priceDecline_reflectsLoss() {
-        // 10주 @ 100,000원 매수, 현재 90,000원 → 손실 -100,000, 수익률 -10%
         InvestmentAccount account = createActiveAccount();
         Holding holding = createHolding("005930", "삼성전자", 10L, 100_000L, 90_000L);
 
@@ -196,6 +217,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of());
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -209,8 +231,6 @@ class PortfolioAnalysisQueryServiceTest {
     @Test
     @DisplayName("StockItem 조회 결과로 STOCK/ETF 비중을 올바르게 계산한다.")
     void getPortfolioAnalysis_withStockAndEtf_calculatesAssetTypeWeights() {
-        // 종목A(STOCK): val=300,000 → stockWeight=75%
-        // 종목B(ETF):   val=100,000 → etfWeight=25%
         InvestmentAccount account = createActiveAccount();
         Holding holdingA = createHolding("A001", "삼성전자", 3L, 100_000L, 100_000L);
         Holding holdingB = createHolding("B001", "KODEX200", 1L, 100_000L, 100_000L);
@@ -223,6 +243,7 @@ class PortfolioAnalysisQueryServiceTest {
         when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holdingA, holdingB));
         when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItemA, stockItemB));
         when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID)).thenReturn(Optional.empty());
 
         PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID));
@@ -240,5 +261,124 @@ class PortfolioAnalysisQueryServiceTest {
         assertThatThrownBy(() -> portfolioAnalysisQueryService.getPortfolioAnalysis(
                 new GetPortfolioAnalysisQuery(INVESTOR_ID)))
                 .isInstanceOf(InvestmentException.class);
+    }
+
+    @Test
+    @DisplayName("COMPLETED AI 분석이 있으면 AI recommendations을 반환한다.")
+    void getPortfolioAnalysis_completedAiAnalysis_returnsAiRecommendations() throws Exception {
+        InvestmentAccount account = createActiveAccount();
+        List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(RecommendationType.PORTFOLIO, null, "룰 기반 이유", "룰 기반 메시지")
+        );
+        PortfolioDiagnosis diagnosisWithRecommendations = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH, RiskLevel.AGGRESSIVE, "요약", List.of(), ruleBasedRecommendations
+        );
+
+        String aiFeedbackJson = """
+                [{"recommendationType":"PORTFOLIO","targetCategory":null,"reason":"AI 이유","message":"AI 메시지"}]""";
+        AiAnalysis completedAnalysis = createCompletedAnalysis(aiFeedbackJson);
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
+                .thenReturn(diagnosisWithRecommendations);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
+                .thenReturn(Optional.of(completedAnalysis));
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        assertThat(result.recommendations()).hasSize(1);
+        assertThat(result.recommendations().get(0).reason()).isEqualTo("AI 이유");
+        assertThat(result.recommendations().get(0).message()).isEqualTo("AI 메시지");
+    }
+
+    @Test
+    @DisplayName("FAILED AI 분석만 있으면 룰 기반 recommendations을 반환한다.")
+    void getPortfolioAnalysis_failedAiAnalysis_returnsRuleBasedRecommendations() {
+        InvestmentAccount account = createActiveAccount();
+        List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(RecommendationType.PORTFOLIO, null, "룰 기반 이유", "룰 기반 메시지")
+        );
+        PortfolioDiagnosis diagnosisWithRecommendations = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH, RiskLevel.AGGRESSIVE, "요약", List.of(), ruleBasedRecommendations
+        );
+
+        AiAnalysis failedAnalysis = createFailedAnalysis();
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
+                .thenReturn(diagnosisWithRecommendations);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
+                .thenReturn(Optional.of(failedAnalysis));
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        assertThat(result.recommendations()).hasSize(1);
+        assertThat(result.recommendations().get(0).reason()).isEqualTo("룰 기반 이유");
+    }
+
+    @Test
+    @DisplayName("AI 분석 aiFeedbackMessage 파싱 실패 시 룰 기반 recommendations로 fallback한다.")
+    void getPortfolioAnalysis_aiParsingFailure_fallbackToRuleBased() {
+        InvestmentAccount account = createActiveAccount();
+        List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(RecommendationType.PORTFOLIO, null, "룰 기반 이유", "룰 기반 메시지")
+        );
+        PortfolioDiagnosis diagnosisWithRecommendations = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH, RiskLevel.AGGRESSIVE, "요약", List.of(), ruleBasedRecommendations
+        );
+
+        AiAnalysis completedAnalysisWithInvalidJson = createCompletedAnalysis("invalid-json");
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any()))
+                .thenReturn(diagnosisWithRecommendations);
+        when(aiAnalysisRepository.findTopByAccountIdOrderByAnalyzedAtDesc(ACCOUNT_ID))
+                .thenReturn(Optional.of(completedAnalysisWithInvalidJson));
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        assertThat(result.recommendations()).hasSize(1);
+        assertThat(result.recommendations().get(0).reason()).isEqualTo("룰 기반 이유");
+    }
+
+    private AiAnalysis createCompletedAnalysis(String aiFeedbackMessage) {
+        LocalDateTime now = LocalDateTime.now();
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
+                ACCOUNT_ID, INVESTOR_ID, "테스터",
+                SEASON_ID, 1,
+                AnalysisType.PORTFOLIO,
+                BigDecimal.valueOf(30), BigDecimal.valueOf(50),
+                "없음", "요약", aiFeedbackMessage,
+                now.toLocalDate().atStartOfDay(), now, now,
+                null, null
+        );
+        AiAnalysis analysis = AiAnalysis.create(command);
+        analysis.complete();
+        return analysis;
+    }
+
+    private AiAnalysis createFailedAnalysis() {
+        LocalDateTime now = LocalDateTime.now();
+        CreateAiAnalysisCommand command = new CreateAiAnalysisCommand(
+                ACCOUNT_ID, INVESTOR_ID, "테스터",
+                SEASON_ID, 1,
+                AnalysisType.PORTFOLIO,
+                BigDecimal.valueOf(30), BigDecimal.valueOf(50),
+                "없음", "요약", "N/A",
+                now.toLocalDate().atStartOfDay(), now, now,
+                null, null
+        );
+        AiAnalysis analysis = AiAnalysis.create(command);
+        analysis.fail("API 오류");
+        return analysis;
     }
 }

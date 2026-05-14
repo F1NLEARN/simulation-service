@@ -17,6 +17,7 @@ import com.finlearn.simulationservice.infrastructure.openai.OpenAiClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.CacheManager;
 import org.springframework.core.io.Resource;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
@@ -26,7 +27,9 @@ import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -35,6 +38,7 @@ public class AiAnalysisService {
     private final AiAnalysisRepository aiAnalysisRepository;
     private final OpenAiClient openAiClient;
     private final ObjectMapper objectMapper;
+    private final CacheManager cacheManager;
 
     @Value("classpath:/prompts/ai-analysis-system.txt")
     private Resource systemPromptResource;
@@ -58,21 +62,26 @@ public class AiAnalysisService {
                             PortfolioAllocationResponse allocation,
                             List<PortfolioRecommendation> ruleBasedRecommendations) {
         String prompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
+        UUID investorId = account.getParticipant().getInvestorId();
 
         try {
             String rawResponse = openAiClient.call(systemPrompt, prompt);
 
-            List<PortfolioRecommendation> aiRecommendations = parseRecommendations(rawResponse);
+            List<PortfolioRecommendation> aiParsed = parseRecommendations(rawResponse);
 
-            if (aiRecommendations.size() != ruleBasedRecommendations.size()) {
+            if (aiParsed.size() != ruleBasedRecommendations.size()) {
                 throw new IllegalStateException("AI 응답 항목 수 불일치");
             }
 
-            String aiFeedbackJson = objectMapper.writeValueAsString(aiRecommendations);
+            List<PortfolioRecommendation> merged = mergeRecommendations(ruleBasedRecommendations, aiParsed);
+            String aiFeedbackJson = objectMapper.writeValueAsString(merged);
+
             AiAnalysis analysis = AiAnalysis.create(
                     buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, prompt));
             analysis.complete();
             aiAnalysisRepository.save(analysis);
+
+            cacheManager.getCache("portfolioAnalysis").evict(investorId);
 
         } catch (Exception e) {
             AiAnalysis analysis = AiAnalysis.create(
@@ -80,6 +89,23 @@ public class AiAnalysisService {
             analysis.fail(e.getMessage());
             aiAnalysisRepository.save(analysis);
         }
+    }
+
+    private List<PortfolioRecommendation> mergeRecommendations(
+            List<PortfolioRecommendation> ruleBased,
+            List<PortfolioRecommendation> aiParsed) {
+        List<PortfolioRecommendation> merged = new ArrayList<>();
+        for (int i = 0; i < ruleBased.size(); i++) {
+            PortfolioRecommendation original = ruleBased.get(i);
+            PortfolioRecommendation ai = aiParsed.get(i);
+            merged.add(new PortfolioRecommendation(
+                    original.recommendationType(),
+                    original.targetCategory(),
+                    ai.reason(),
+                    ai.message()
+            ));
+        }
+        return merged;
     }
 
     private List<PortfolioRecommendation> parseRecommendations(String rawResponse) throws JsonProcessingException {

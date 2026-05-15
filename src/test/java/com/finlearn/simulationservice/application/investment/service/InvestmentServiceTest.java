@@ -515,7 +515,7 @@ class InvestmentServiceTest {
     void getStockItemsWithKeyword() {
         StockItem stockItem = StockItem.create("삼성전자", "005930", StockAssetType.STOCK);
         PageRequest pageRequest = PageRequest.of(1, 10, Sort.by(Sort.Direction.ASC, "stockCode"));
-        when(stockItemRepository.searchTradableStocksByAssetTypeAndKeyword(StockAssetType.STOCK, "삼성", pageRequest))
+        when(stockItemRepository.searchStocksByAssetTypeAndKeyword(StockAssetType.STOCK, "삼성", pageRequest))
                 .thenReturn(new PageImpl<>(List.of(stockItem), pageRequest, 21));
 
         StockItemListResponse result = investmentService.getStockItems("STOCK", "  삼성  ", 1, 10);

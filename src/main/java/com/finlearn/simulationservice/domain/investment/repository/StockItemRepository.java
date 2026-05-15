@@ -35,7 +35,7 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
                     OR LOWER(s.stockCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             """)
-    Page<StockItem> searchTradableStocksByKeyword(
+    Page<StockItem> searchStocksByKeyword(
             @Param("keyword") String keyword,
             Pageable pageable
     );
@@ -49,7 +49,7 @@ public interface StockItemRepository extends JpaRepository<StockItem, UUID> {
                     OR LOWER(s.stockCode) LIKE LOWER(CONCAT('%', :keyword, '%'))
               )
             """)
-    Page<StockItem> searchTradableStocksByAssetTypeAndKeyword(
+    Page<StockItem> searchStocksByAssetTypeAndKeyword(
             @Param("assetType") StockAssetType assetType,
             @Param("keyword") String keyword,
             Pageable pageable

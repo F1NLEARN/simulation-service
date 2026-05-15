@@ -21,8 +21,9 @@ public class KisStockPriceClient {
     private final KisApiProperties properties;
     private final RestClient restClient;
 
-    private String cachedAccessToken;
-    private Instant cachedAccessTokenExpiresAt = Instant.EPOCH;
+    private final Object tokenRefreshLock = new Object();
+    private volatile String cachedAccessToken;
+    private volatile Instant cachedAccessTokenExpiresAt = Instant.EPOCH;
 
     public KisStockPriceClient(KisApiProperties properties, RestClient.Builder restClientBuilder) {
         this.properties = properties;
@@ -63,28 +64,35 @@ public class KisStockPriceClient {
         }
     }
 
-    private synchronized String getAccessToken() {
+    private String getAccessToken() {
         Instant now = Instant.now();
         if (cachedAccessToken != null && now.isBefore(cachedAccessTokenExpiresAt)) {
             return cachedAccessToken;
         }
 
-        KisTokenResponse response = restClient.post()
-                .uri(properties.getTokenPath())
-                .contentType(MediaType.APPLICATION_JSON)
-                .body(new KisTokenRequest("client_credentials", properties.getAppKey(), properties.getAppSecret()))
-                .retrieve()
-                .body(KisTokenResponse.class);
+        synchronized (tokenRefreshLock) {
+            now = Instant.now();
+            if (cachedAccessToken != null && now.isBefore(cachedAccessTokenExpiresAt)) {
+                return cachedAccessToken;
+            }
 
-        if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
-            throw new IllegalArgumentException("KIS access token response is empty");
+            KisTokenResponse response = restClient.post()
+                    .uri(properties.getTokenPath())
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .body(new KisTokenRequest("client_credentials", properties.getAppKey(), properties.getAppSecret()))
+                    .retrieve()
+                    .body(KisTokenResponse.class);
+
+            if (response == null || response.accessToken() == null || response.accessToken().isBlank()) {
+                throw new IllegalArgumentException("KIS access token response is empty");
+            }
+
+            long expiresIn = response.expiresIn() == null ? 0L : response.expiresIn();
+            long cacheSeconds = Math.max(0L, expiresIn - TOKEN_EXPIRY_MARGIN_SECONDS);
+            cachedAccessToken = response.accessToken();
+            cachedAccessTokenExpiresAt = now.plusSeconds(cacheSeconds);
+            return cachedAccessToken;
         }
-
-        long expiresIn = response.expiresIn() == null ? 0L : response.expiresIn();
-        long cacheSeconds = Math.max(0L, expiresIn - TOKEN_EXPIRY_MARGIN_SECONDS);
-        cachedAccessToken = response.accessToken();
-        cachedAccessTokenExpiresAt = now.plusSeconds(cacheSeconds);
-        return cachedAccessToken;
     }
 
     private Optional<Long> parseCurrentPrice(KisPriceResponse response) {

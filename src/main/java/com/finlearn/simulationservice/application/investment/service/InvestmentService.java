@@ -229,10 +229,10 @@ public class InvestmentService {
             return StockItemListResponse.from(stockItemRepository.findByAssetType(filter, pageRequest));
         }
         if (filter == null) {
-            return StockItemListResponse.from(stockItemRepository.searchTradableStocksByKeyword(normalizedKeyword, pageRequest));
+            return StockItemListResponse.from(stockItemRepository.searchStocksByKeyword(normalizedKeyword, pageRequest));
         }
         return StockItemListResponse.from(
-                stockItemRepository.searchTradableStocksByAssetTypeAndKeyword(filter, normalizedKeyword, pageRequest)
+                stockItemRepository.searchStocksByAssetTypeAndKeyword(filter, normalizedKeyword, pageRequest)
         );
     }
 

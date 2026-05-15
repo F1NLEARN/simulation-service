@@ -46,15 +46,15 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
-                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
-
         String normalizedStockCode = normalizeStockCode(request.stockCode());
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
         Long currentPrice = resolveCurrentPriceAndCache(normalizedStockCode, stockItem)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
+
+        InvestmentAccount account = investmentAccountRepository.findByInvestorIdAndStatusForUpdate(userId, InvestmentAccountStatus.ACTIVE)
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         long totalAmount = currentPrice * request.quantity();
 
@@ -111,15 +111,15 @@ public class InvestmentOrderService {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ORDER_QUANTITY);
         }
 
-        InvestmentAccount account = investmentAccountRepository.findByParticipant_InvestorIdAndStatus(userId, InvestmentAccountStatus.ACTIVE)
-                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
-
         String normalizedStockCode = normalizeStockCode(request.stockCode());
         StockItem stockItem = stockItemRepository.findByStockCode(normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
         Long currentPrice = resolveCurrentPriceAndCache(normalizedStockCode, stockItem)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_NOT_TRADABLE));
+
+        InvestmentAccount account = investmentAccountRepository.findByInvestorIdAndStatusForUpdate(userId, InvestmentAccountStatus.ACTIVE)
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         Holding holding = holdingRepository.findByAccountIdAndInstrumentCode(account.getAccountId(), normalizedStockCode)
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.HOLDING_STOCK_NOT_FOUND));

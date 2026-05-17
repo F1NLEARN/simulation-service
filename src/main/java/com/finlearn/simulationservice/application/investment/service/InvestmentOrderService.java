@@ -17,11 +17,13 @@ import com.finlearn.simulationservice.domain.investment.repository.InvestmentAcc
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
+import com.finlearn.simulationservice.domain.tradehistory.event.TradeCompletedEvent;
 import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
 import java.time.LocalDateTime;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -39,6 +41,7 @@ public class InvestmentOrderService {
     private final StockPriceRepository stockPriceRepository;
     private final HoldingRepository holdingRepository;
     private final TradeHistoryRepository tradeHistoryRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public BuyStockResponse buy(UUID userId, BuyOrderRequest request) {
@@ -58,7 +61,6 @@ public class InvestmentOrderService {
 
         long totalAmount = currentPrice * request.quantity();
 
-        // account.buy() validates cash balance internally and throws INSUFFICIENT_CASH if not enough
         account.buy(normalizedStockCode, stockItem.getStockName(), request.quantity(), currentPrice, LocalDateTime.now());
         investmentAccountRepository.save(account);
 
@@ -80,6 +82,7 @@ public class InvestmentOrderService {
                 )));
         holdingRepository.save(holding);
 
+        LocalDateTime executedAt = LocalDateTime.now();
         long cashBalanceAfterTrade = account.getCurrentCashBalance();
         TradeHistory tradeHistory = TradeHistory.buy(
                 account.getAccountId(),
@@ -88,10 +91,15 @@ public class InvestmentOrderService {
                 normalizedStockCode,
                 request.quantity(),
                 currentPrice,
-                LocalDateTime.now(),
+                executedAt,
                 cashBalanceAfterTrade
         );
         tradeHistoryRepository.save(tradeHistory);
+
+        eventPublisher.publishEvent(new TradeCompletedEvent(
+                userId, account.getAccountId(), account.getParticipant().getSeasonId(),
+                "BUY", stockItem.getAssetType().name(), normalizedStockCode, executedAt
+        ));
 
         return new BuyStockResponse(
                 account.getAccountId(),
@@ -130,7 +138,6 @@ public class InvestmentOrderService {
 
         long totalSellAmount = currentPrice * request.quantity();
 
-        // account.sell() handles cash balance and HoldingStock internally
         account.sell(normalizedStockCode, request.quantity(), currentPrice, LocalDateTime.now());
         investmentAccountRepository.save(account);
 
@@ -144,6 +151,7 @@ public class InvestmentOrderService {
             holdingRepository.save(holding);
         }
 
+        LocalDateTime executedAt = LocalDateTime.now();
         long cashBalanceAfterTrade = account.getCurrentCashBalance();
         TradeHistory tradeHistory = TradeHistory.sell(
                 account.getAccountId(),
@@ -152,10 +160,15 @@ public class InvestmentOrderService {
                 normalizedStockCode,
                 request.quantity(),
                 currentPrice,
-                LocalDateTime.now(),
+                executedAt,
                 cashBalanceAfterTrade
         );
         tradeHistoryRepository.save(tradeHistory);
+
+        eventPublisher.publishEvent(new TradeCompletedEvent(
+                userId, account.getAccountId(), account.getParticipant().getSeasonId(),
+                "SELL", stockItem.getAssetType().name(), normalizedStockCode, executedAt
+        ));
 
         return new SellStockResponse(
                 normalizedStockCode,

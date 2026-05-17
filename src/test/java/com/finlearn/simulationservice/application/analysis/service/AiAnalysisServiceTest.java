@@ -12,7 +12,6 @@ import com.finlearn.simulationservice.domain.analysis.vo.RecommendationType;
 import com.finlearn.simulationservice.domain.analysis.vo.RiskLevel;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.vo.SeasonParticipant;
-import com.finlearn.simulationservice.infrastructure.openai.OpenAiClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -20,6 +19,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.cache.Cache;
 import org.springframework.cache.CacheManager;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -41,10 +41,14 @@ class AiAnalysisServiceTest {
     private AiAnalysisRepository aiAnalysisRepository;
 
     @Mock
-    private OpenAiClient openAiClient;
+    private CacheManager cacheManager;
 
     @Mock
-    private CacheManager cacheManager;
+    private ChatClient chatClient;
+
+    // ChatClient 체인 Mock
+    private ChatClient.ChatClientRequestSpec requestSpec;
+    private ChatClient.CallResponseSpec callSpec;
 
     private AiAnalysisService aiAnalysisService;
 
@@ -59,10 +63,19 @@ class AiAnalysisServiceTest {
 
     @BeforeEach
     void setUp() {
-        aiAnalysisService = new AiAnalysisService(aiAnalysisRepository, openAiClient, new ObjectMapper(), cacheManager);
+        requestSpec = mock(ChatClient.ChatClientRequestSpec.class);
+        callSpec = mock(ChatClient.CallResponseSpec.class);
+
+        when(chatClient.prompt()).thenReturn(requestSpec);
+        when(requestSpec.system(anyString())).thenReturn(requestSpec);
+        when(requestSpec.user(anyString())).thenReturn(requestSpec);
+        when(requestSpec.call()).thenReturn(callSpec);
+
+        aiAnalysisService = new AiAnalysisService(aiAnalysisRepository, null, new ObjectMapper(), cacheManager);
         ReflectionTestUtils.setField(aiAnalysisService, "systemPrompt", "금융 전문가 시스템 프롬프트 (테스트용)");
         ReflectionTestUtils.setField(aiAnalysisService, "userPromptTemplate",
                 "집중도: {concentrationLevel}, 리스크: {riskLevel}, 요약: {analysisSummary}, 경고: {warnings}\n{recommendations}");
+        ReflectionTestUtils.setField(aiAnalysisService, "chatClient", chatClient);
 
         account = InvestmentAccount.open(
                 new SeasonParticipant(INVESTOR_ID, "테스터", SEASON_ID, 1),
@@ -87,7 +100,7 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("OpenAI 응답 성공 시 COMPLETED 상태로 저장되고 캐시가 무효화된다.")
+    @DisplayName("AI 응답 성공 시 COMPLETED 상태로 저장되고 캐시가 무효화된다.")
     void createAsync_success_savesCompletedAnalysisAndEvictsCache() {
         String aiResponse = """
                 {
@@ -108,7 +121,7 @@ class AiAnalysisServiceTest {
                 }""";
 
         Cache mockCache = mock(Cache.class);
-        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
@@ -126,8 +139,7 @@ class AiAnalysisServiceTest {
 
     @Test
     @DisplayName("성공 시 원본 recommendationType, targetCategory를 유지하고 AI의 reason, message만 병합한다.")
-    void createAsync_success_mergesOnlyReasonAndMessage() throws Exception {
-        // AI가 순서와 타입을 바꿔서 반환하더라도, 원본의 recommendationType/targetCategory가 유지되어야 함
+    void createAsync_success_mergesOnlyReasonAndMessage() {
         String aiResponse = """
                 {
                   "recommendations": [
@@ -147,7 +159,7 @@ class AiAnalysisServiceTest {
                 }""";
 
         Cache mockCache = mock(Cache.class);
-        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
@@ -156,20 +168,17 @@ class AiAnalysisServiceTest {
         verify(aiAnalysisRepository).save(captor.capture());
 
         String savedJson = captor.getValue().getAiFeedbackMessage();
-        // 원본 recommendationType, targetCategory 유지 확인
         assertThat(savedJson).contains("PORTFOLIO");
         assertThat(savedJson).contains("DOMESTIC_ETF");
-        // AI의 reason, message 적용 확인
         assertThat(savedJson).contains("AI가 재작성한 이유");
         assertThat(savedJson).contains("AI ETF 이유");
-        // AI가 반환한 FOREIGN_ETF는 저장되지 않아야 함
         assertThat(savedJson).doesNotContain("FOREIGN_ETF");
     }
 
     @Test
-    @DisplayName("OpenAI 호출 실패 시 FAILED 상태로 저장된다.")
+    @DisplayName("AI 호출 실패 시 FAILED 상태로 저장된다.")
     void createAsync_openAiError_savesFailedAnalysis() {
-        when(openAiClient.call(anyString(), anyString())).thenThrow(new RuntimeException("API timeout"));
+        when(callSpec.content()).thenThrow(new RuntimeException("API timeout"));
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
 
@@ -197,7 +206,7 @@ class AiAnalysisServiceTest {
                   ]
                 }""";
 
-        when(openAiClient.call(anyString(), anyString())).thenReturn(mismatchedResponse);
+        when(callSpec.content()).thenReturn(mismatchedResponse);
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
 
@@ -213,7 +222,7 @@ class AiAnalysisServiceTest {
     @Test
     @DisplayName("AI 응답 JSON 파싱 실패 시 FAILED 상태로 저장된다.")
     void createAsync_invalidJson_savesFailedAnalysis() {
-        when(openAiClient.call(anyString(), anyString())).thenReturn("invalid json");
+        when(callSpec.content()).thenReturn("invalid json");
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
 
@@ -247,7 +256,7 @@ class AiAnalysisServiceTest {
                 }""";
 
         Cache mockCache = mock(Cache.class);
-        when(openAiClient.call(anyString(), anyString())).thenReturn(aiResponse);
+        when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
         aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);

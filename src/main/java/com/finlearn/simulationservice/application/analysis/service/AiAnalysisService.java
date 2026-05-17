@@ -16,6 +16,7 @@ import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Value;
@@ -183,11 +184,7 @@ public class AiAnalysisService {
                     "warnings", diagnosis.warnings().toString(),
                     "recommendations", recommendationsJson
             );
-            String result = userPromptTemplate;
-            for (Map.Entry<String, Object> entry : variables.entrySet()) {
-                result = result.replace("{" + entry.getKey() + "}", entry.getValue().toString());
-            }
-            return result;
+            return new PromptTemplate(userPromptTemplate).render(variables);
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to build user prompt", e);
         }

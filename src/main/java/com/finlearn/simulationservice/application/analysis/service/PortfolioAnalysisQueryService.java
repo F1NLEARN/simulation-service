@@ -53,14 +53,16 @@ public class PortfolioAnalysisQueryService {
         PortfolioAnalysisData data = computePortfolioData(query.investorId());
         List<PortfolioRecommendation> resolvedRecommendations =
                 resolveRecommendations(data.account().getAccountId(), data.diagnosis().recommendations());
-        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(), resolvedRecommendations);
+        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(),
+                resolvedRecommendations, data.stockReturnRate(), data.etfReturnRate());
     }
 
     @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
     public PortfolioAnalysisResponse refresh(UUID investorId) {
         PortfolioAnalysisData data = computePortfolioData(investorId);
         aiAnalysisService.createAsync(data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations());
-        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(), data.diagnosis().recommendations());
+        return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(),
+                data.diagnosis().recommendations(), data.stockReturnRate(), data.etfReturnRate());
     }
 
     @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
@@ -73,7 +75,10 @@ public class PortfolioAnalysisQueryService {
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.INVESTMENT_ACCOUNT_NOT_FOUND));
 
         List<Holding> holdings = holdingRepository.findAllWithFilter(account.getAccountId(), null);
-        PortfolioAllocationResponse allocation = buildAllocation(account, holdings);
+
+        Map<String, StockAssetType> assetTypeMap = buildAssetTypeMap(holdings);
+
+        PortfolioAllocationResponse allocation = buildAllocation(account, holdings, assetTypeMap);
 
         long totalBuyAmount = holdings.stream().mapToLong(Holding::getTotalBuyAmount).sum();
         long totalValuationAmount = holdings.stream().mapToLong(Holding::getValuationAmount).sum();
@@ -88,7 +93,10 @@ public class PortfolioAnalysisQueryService {
                 allocation.topHoldingWeight(), holdings.size(),
                 allocation.cashWeight(), holdingsReturnRate, allocation.etfWeight());
 
-        return new PortfolioAnalysisData(account, holdings, allocation, diagnosis);
+        BigDecimal stockReturnRate = computeAssetReturnRate(holdings, assetTypeMap, StockAssetType.STOCK);
+        BigDecimal etfReturnRate = computeAssetReturnRate(holdings, assetTypeMap, StockAssetType.ETF);
+
+        return new PortfolioAnalysisData(account, holdings, allocation, diagnosis, stockReturnRate, etfReturnRate);
     }
 
     private List<PortfolioRecommendation> resolveRecommendations(
@@ -110,7 +118,19 @@ public class PortfolioAnalysisQueryService {
                 .orElse(ruleBasedRecommendations);
     }
 
-    private PortfolioAllocationResponse buildAllocation(InvestmentAccount account, List<Holding> holdings) {
+    private Map<String, StockAssetType> buildAssetTypeMap(List<Holding> holdings) {
+        if (holdings.isEmpty()) {
+            return Map.of();
+        }
+        List<String> instrumentCodes = holdings.stream()
+                .map(h -> h.getInstrumentCode().getValue())
+                .toList();
+        return stockItemRepository.findAllByStockCodeIn(instrumentCodes).stream()
+                .collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+    }
+
+    private PortfolioAllocationResponse buildAllocation(InvestmentAccount account, List<Holding> holdings,
+                                                        Map<String, StockAssetType> assetTypeMap) {
         long totalValuationAmount = holdings.stream().mapToLong(Holding::getValuationAmount).sum();
         long totalAssetAmount = account.getTotalAssetAmount();
 
@@ -133,14 +153,6 @@ public class PortfolioAnalysisQueryService {
         BigDecimal etfWeight = BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
 
         if (!holdings.isEmpty() && totalValuationAmount > 0) {
-            List<String> instrumentCodes = holdings.stream()
-                    .map(h -> h.getInstrumentCode().getValue())
-                    .toList();
-
-            Map<String, StockAssetType> assetTypeMap = stockItemRepository
-                    .findAllByStockCodeIn(instrumentCodes).stream()
-                    .collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
-
             long stockValuation = holdings.stream()
                     .filter(h -> assetTypeMap.getOrDefault(
                             h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.STOCK)
@@ -165,10 +177,30 @@ public class PortfolioAnalysisQueryService {
         return new PortfolioAllocationResponse(stockWeight, etfWeight, cashWeight, topHoldingWeight, holdings.size());
     }
 
+    private BigDecimal computeAssetReturnRate(List<Holding> holdings, Map<String, StockAssetType> assetTypeMap,
+                                              StockAssetType targetType) {
+        List<Holding> filtered = holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == targetType)
+                .toList();
+
+        long totalBuyAmount = filtered.stream().mapToLong(Holding::getTotalBuyAmount).sum();
+        if (totalBuyAmount == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        long totalUnrealizedProfitLoss = filtered.stream().mapToLong(Holding::getUnrealizedProfitLoss).sum();
+        return BigDecimal.valueOf(totalUnrealizedProfitLoss)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalBuyAmount), 2, RoundingMode.HALF_UP);
+    }
+
     private record PortfolioAnalysisData(
             InvestmentAccount account,
             List<Holding> holdings,
             PortfolioAllocationResponse allocation,
-            PortfolioDiagnosis diagnosis
+            PortfolioDiagnosis diagnosis,
+            BigDecimal stockReturnRate,
+            BigDecimal etfReturnRate
     ) {}
 }

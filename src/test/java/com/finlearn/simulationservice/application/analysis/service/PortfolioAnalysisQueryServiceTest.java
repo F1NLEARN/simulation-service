@@ -254,6 +254,93 @@ class PortfolioAnalysisQueryServiceTest {
     }
 
     @Test
+    @DisplayName("빈 포트폴리오이면 stockReturnRate와 etfReturnRate가 0.0이다.")
+    void getPortfolioAnalysis_emptyPortfolio_assetReturnRatesAreZero() {
+        InvestmentAccount account = createActiveAccount();
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of());
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        assertThat(result.portfolioSummary().stockReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
+        assertThat(result.portfolioSummary().etfReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("STOCK만 보유 시 stockReturnRate는 계산되고 etfReturnRate는 0.0이다.")
+    void getPortfolioAnalysis_onlyStock_stockReturnRateCalculatedEtfZero() {
+        InvestmentAccount account = createActiveAccount();
+        Holding holding = createHolding("A001", "삼성전자", 10L, 100_000L, 120_000L);
+        StockItem stockItem = StockItem.create("삼성전자", "A001", StockAssetType.STOCK);
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItem));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        // unrealizedProfitLoss = (120000 - 100000) * 10 = 200000, totalBuyAmount = 1000000 → 20.00%
+        assertThat(result.portfolioSummary().stockReturnRate()).isEqualByComparingTo(new BigDecimal("20.00"));
+        assertThat(result.portfolioSummary().etfReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("ETF만 보유 시 etfReturnRate는 계산되고 stockReturnRate는 0.0이다.")
+    void getPortfolioAnalysis_onlyEtf_etfReturnRateCalculatedStockZero() {
+        InvestmentAccount account = createActiveAccount();
+        Holding holding = createHolding("B001", "KODEX200", 5L, 50_000L, 40_000L);
+        StockItem etfItem = StockItem.create("KODEX200", "B001", StockAssetType.ETF);
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(holding));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(etfItem));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        // unrealizedProfitLoss = (40000 - 50000) * 5 = -50000, totalBuyAmount = 250000 → -20.00%
+        assertThat(result.portfolioSummary().etfReturnRate()).isEqualByComparingTo(new BigDecimal("-20.00"));
+        assertThat(result.portfolioSummary().stockReturnRate()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    @DisplayName("STOCK과 ETF 혼합 보유 시 자산별 수익률이 독립적으로 계산된다.")
+    void getPortfolioAnalysis_mixedHoldings_assetReturnRatesCalculatedIndependently() {
+        InvestmentAccount account = createActiveAccount();
+        Holding stockHolding = createHolding("A001", "삼성전자", 10L, 100_000L, 110_000L);
+        Holding etfHolding = createHolding("B001", "KODEX200", 4L, 50_000L, 45_000L);
+
+        StockItem stockItem = StockItem.create("삼성전자", "A001", StockAssetType.STOCK);
+        StockItem etfItem = StockItem.create("KODEX200", "B001", StockAssetType.ETF);
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))
+                .thenReturn(Optional.of(account));
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null)).thenReturn(List.of(stockHolding, etfHolding));
+        when(stockItemRepository.findAllByStockCodeIn(any())).thenReturn(List.of(stockItem, etfItem));
+        when(portfolioAnalysisDomainService.diagnose(any(), anyInt(), any(), any(), any())).thenReturn(STUB_DIAGNOSIS);
+        when(aiAnalysisRepository.findTopByAccountIdAndAnalysisStatusOrderByAnalyzedAtDesc(ACCOUNT_ID, AnalysisStatus.COMPLETED)).thenReturn(Optional.empty());
+
+        PortfolioAnalysisResponse result = portfolioAnalysisQueryService.getPortfolioAnalysis(
+                new GetPortfolioAnalysisQuery(INVESTOR_ID));
+
+        // STOCK: unrealized = 100000, totalBuy = 1000000 → 10.00%
+        assertThat(result.portfolioSummary().stockReturnRate()).isEqualByComparingTo(new BigDecimal("10.00"));
+        // ETF: unrealized = -20000, totalBuy = 200000 → -10.00%
+        assertThat(result.portfolioSummary().etfReturnRate()).isEqualByComparingTo(new BigDecimal("-10.00"));
+    }
+
+    @Test
     @DisplayName("ACTIVE 투자계좌가 없으면 InvestmentException을 던진다.")
     void getPortfolioAnalysis_noActiveAccount_throwsInvestmentException() {
         when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(INVESTOR_ID, InvestmentAccountStatus.ACTIVE))

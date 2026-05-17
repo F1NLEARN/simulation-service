@@ -21,7 +21,9 @@ public record PortfolioAnalysisResponse(
     public static PortfolioAnalysisResponse of(InvestmentAccount account, List<Holding> holdings,
                                                PortfolioAllocationResponse allocation,
                                                PortfolioDiagnosis diagnosis,
-                                               List<PortfolioRecommendation> recommendations) {
+                                               List<PortfolioRecommendation> recommendations,
+                                               BigDecimal stockReturnRate,
+                                               BigDecimal etfReturnRate) {
         long totalBuyAmount = holdings.stream()
                 .mapToLong(Holding::getTotalBuyAmount)
                 .sum();
@@ -49,7 +51,8 @@ public record PortfolioAnalysisResponse(
 
         PortfolioSummaryResponse summaryResponse = new PortfolioSummaryResponse(
                 totalBuyAmount, totalValuationAmount, account.getCurrentCashBalance(),
-                account.getTotalAssetAmount(), totalProfitLoss, totalReturnRate
+                account.getTotalAssetAmount(), totalProfitLoss, totalReturnRate,
+                stockReturnRate, etfReturnRate
         );
 
         List<PortfolioRecommendationResponse> recommendationResponses = recommendations.stream()

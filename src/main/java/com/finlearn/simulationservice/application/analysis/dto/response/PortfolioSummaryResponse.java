@@ -8,5 +8,7 @@ public record PortfolioSummaryResponse(
         long cashBalance,
         long totalAssetAmount,
         long totalProfitLoss,
-        BigDecimal totalReturnRate
+        BigDecimal totalReturnRate,
+        BigDecimal stockReturnRate,
+        BigDecimal etfReturnRate
 ) {}

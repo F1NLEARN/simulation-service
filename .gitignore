@@ -37,3 +37,10 @@ out/
 .vscode/
 ssl/
 *.jks
+
+### Local / performance artifacts ###
+.DS_Store
+**/.DS_Store
+performance/*.log
+performance/*.jtl
+performance/report/

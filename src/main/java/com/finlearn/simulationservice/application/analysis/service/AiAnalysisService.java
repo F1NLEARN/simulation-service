@@ -13,9 +13,11 @@ import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
 import com.finlearn.simulationservice.domain.analysis.vo.RecommendationType;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
-import com.finlearn.simulationservice.infrastructure.openai.OpenAiClient;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.core.io.Resource;
@@ -29,6 +31,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -36,7 +39,7 @@ import java.util.UUID;
 public class AiAnalysisService {
 
     private final AiAnalysisRepository aiAnalysisRepository;
-    private final OpenAiClient openAiClient;
+    private final ChatClient.Builder chatClientBuilder;
     private final ObjectMapper objectMapper;
     private final CacheManager cacheManager;
 
@@ -48,11 +51,19 @@ public class AiAnalysisService {
 
     private String systemPrompt;
     private String userPromptTemplate;
+    private ChatClient chatClient;
 
     @PostConstruct
-    void loadPrompts() throws IOException {
+    void init() throws IOException {
         systemPrompt = systemPromptResource.getContentAsString(StandardCharsets.UTF_8);
         userPromptTemplate = userPromptTemplateResource.getContentAsString(StandardCharsets.UTF_8);
+        chatClient = chatClientBuilder
+                .defaultOptions(OpenAiChatOptions.builder()
+                        .responseFormat(ResponseFormat.builder()
+                                .type(ResponseFormat.Type.JSON_OBJECT)
+                                .build())
+                        .build())
+                .build();
     }
 
     @Async("aiAnalysisExecutor")
@@ -61,11 +72,15 @@ public class AiAnalysisService {
                             PortfolioDiagnosis diagnosis,
                             PortfolioAllocationResponse allocation,
                             List<PortfolioRecommendation> ruleBasedRecommendations) {
-        String prompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
+        String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
         UUID investorId = account.getParticipant().getInvestorId();
 
         try {
-            String rawResponse = openAiClient.call(systemPrompt, prompt);
+            String rawResponse = chatClient.prompt()
+                    .system(systemPrompt)
+                    .user(userPrompt)
+                    .call()
+                    .content();
 
             List<PortfolioRecommendation> aiParsed = parseRecommendations(rawResponse);
 
@@ -77,7 +92,7 @@ public class AiAnalysisService {
             String aiFeedbackJson = objectMapper.writeValueAsString(merged);
 
             AiAnalysis analysis = AiAnalysis.create(
-                    buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, prompt));
+                    buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, userPrompt));
             analysis.complete();
             aiAnalysisRepository.save(analysis);
 
@@ -85,7 +100,7 @@ public class AiAnalysisService {
 
         } catch (Exception e) {
             AiAnalysis analysis = AiAnalysis.create(
-                    buildCommand(account, diagnosis, allocation, "N/A", null, prompt));
+                    buildCommand(account, diagnosis, allocation, "N/A", null, userPrompt));
             analysis.fail(e.getMessage());
             aiAnalysisRepository.save(analysis);
         }
@@ -161,12 +176,18 @@ public class AiAnalysisService {
     private String buildUserPrompt(PortfolioDiagnosis diagnosis, List<PortfolioRecommendation> ruleBasedRecommendations) {
         try {
             String recommendationsJson = objectMapper.writeValueAsString(ruleBasedRecommendations);
-            return userPromptTemplate
-                    .replace("{concentrationLevel}", diagnosis.concentrationLevel().name())
-                    .replace("{riskLevel}", diagnosis.riskLevel().name())
-                    .replace("{analysisSummary}", diagnosis.analysisSummary())
-                    .replace("{warnings}", diagnosis.warnings().toString())
-                    .replace("{recommendations}", recommendationsJson);
+            Map<String, Object> variables = Map.of(
+                    "concentrationLevel", diagnosis.concentrationLevel().name(),
+                    "riskLevel", diagnosis.riskLevel().name(),
+                    "analysisSummary", diagnosis.analysisSummary(),
+                    "warnings", diagnosis.warnings().toString(),
+                    "recommendations", recommendationsJson
+            );
+            String result = userPromptTemplate;
+            for (Map.Entry<String, Object> entry : variables.entrySet()) {
+                result = result.replace("{" + entry.getKey() + "}", entry.getValue().toString());
+            }
+            return result;
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Failed to build user prompt", e);
         }

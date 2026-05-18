@@ -7,6 +7,7 @@ import java.util.UUID;
 public record TradeHistoryResponse(
         UUID tradeHistoryId,
         String stockCode,
+        String stockName,
         String tradeType,
         long quantity,
         BigDecimal tradePrice,

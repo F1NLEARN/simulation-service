@@ -3,16 +3,21 @@ package com.finlearn.simulationservice.application.investment.service;
 import com.finlearn.simulationservice.application.investment.dto.response.TradeHistoryListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.TradeHistoryResponse;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
+import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
+import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeType;
 import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -28,6 +33,7 @@ public class InvestmentTradeService {
 
     private final InvestmentAccountRepository investmentAccountRepository;
     private final TradeHistoryRepository tradeHistoryRepository;
+    private final StockItemRepository stockItemRepository;
 
     public TradeHistoryListResponse getTradeHistories(
             UUID userId,
@@ -51,8 +57,16 @@ public class InvestmentTradeService {
                 pageable
         );
 
+        List<TradeHistory> trades = tradePage.getContent();
+        List<String> stockCodes = trades.stream()
+                .map(t -> t.getInstrumentCode().getValue())
+                .distinct()
+                .toList();
+        Map<String, String> stockNameMap = stockItemRepository.findAllByStockCodeIn(stockCodes).stream()
+                .collect(Collectors.toMap(StockItem::getStockCode, StockItem::getStockName));
+
         return new TradeHistoryListResponse(
-                tradePage.getContent().stream().map(this::toResponse).toList(),
+                trades.stream().map(t -> toResponse(t, stockNameMap)).toList(),
                 tradePage.getNumber(),
                 tradePage.getSize(),
                 tradePage.getTotalElements(),
@@ -61,10 +75,12 @@ public class InvestmentTradeService {
         );
     }
 
-    private TradeHistoryResponse toResponse(TradeHistory tradeHistory) {
+    private TradeHistoryResponse toResponse(TradeHistory tradeHistory, Map<String, String> stockNameMap) {
+        String code = tradeHistory.getInstrumentCode().getValue();
         return new TradeHistoryResponse(
                 tradeHistory.getTradeHistoryId(),
-                tradeHistory.getInstrumentCode().getValue(),
+                code,
+                stockNameMap.getOrDefault(code, code),
                 tradeHistory.getTradeType().name(),
                 tradeHistory.getQuantity(),
                 toMoney(tradeHistory.getTradePrice()),

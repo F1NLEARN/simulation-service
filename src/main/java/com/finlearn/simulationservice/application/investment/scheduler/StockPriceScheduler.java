@@ -8,6 +8,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,6 +22,11 @@ public class StockPriceScheduler {
     private final KisApiProperties kisApiProperties;
     private final KisStockPriceClient kisStockPriceClient;
     private final StockItemRepository stockItemRepository;
+
+    @EventListener(ApplicationReadyEvent.class)
+    public void refreshOnStartup() {
+        refreshAllStockPrices();
+    }
 
     @Scheduled(fixedRateString = "${stock-price-scheduler.interval-ms:600000}")
     @Transactional

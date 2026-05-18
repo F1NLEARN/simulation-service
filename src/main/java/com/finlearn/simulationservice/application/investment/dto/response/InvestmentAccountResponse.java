@@ -18,7 +18,7 @@ public record InvestmentAccountResponse(
     public static InvestmentAccountResponse from(InvestmentAccount account) {
         BigDecimal initialSeedMoney = BigDecimal.valueOf(account.getInitialSeedMoney());
         BigDecimal cashBalance = BigDecimal.valueOf(account.getCurrentCashBalance());
-        BigDecimal totalEvaluationAmount = BigDecimal.valueOf(account.getTotalAssetAmount());
+        BigDecimal totalEvaluationAmount = BigDecimal.valueOf(account.getTotalValuationAmount());
         BigDecimal totalProfitLoss = totalEvaluationAmount.subtract(initialSeedMoney);
         BigDecimal totalProfitRate = account.getTotalReturnRate();
 

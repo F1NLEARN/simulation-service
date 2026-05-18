@@ -52,3 +52,6 @@ external:
 stock-master:
   seed:
     enabled: ${STOCK_MASTER_SEED_ENABLED:true}
+
+stock-price-scheduler:
+  interval-ms: ${STOCK_PRICE_SCHEDULER_INTERVAL_MS:600000}

@@ -25,9 +25,9 @@ public class KisStockPriceClient {
     private volatile String cachedAccessToken;
     private volatile Instant cachedAccessTokenExpiresAt = Instant.EPOCH;
 
-    public KisStockPriceClient(KisApiProperties properties, RestClient.Builder restClientBuilder) {
+    public KisStockPriceClient(KisApiProperties properties) {
         this.properties = properties;
-        this.restClient = restClientBuilder
+        this.restClient = RestClient.builder()
                 .baseUrl(properties.getBaseUrl())
                 .build();
     }

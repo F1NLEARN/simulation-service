@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -49,11 +50,13 @@ public class OutboxEventScheduler {
         String payload = event.getPayload();
 
         if (KafkaTopics.TRADE_EXECUTED.equals(topic)) {
-            kafkaProducer.sendTradeExecuted(objectMapper.readValue(payload, TradeExecutedEvent.class));
+            kafkaProducer.sendTradeExecuted(objectMapper.readValue(payload, TradeExecutedEvent.class))
+                    .get(10, TimeUnit.SECONDS);
         } else if (KafkaTopics.PORTFOLIO_SNAPSHOT.equals(topic)) {
-            kafkaProducer.sendPortfolioSnapshot(objectMapper.readValue(payload, PortfolioSnapshotEvent.class));
+            kafkaProducer.sendPortfolioSnapshot(objectMapper.readValue(payload, PortfolioSnapshotEvent.class))
+                    .get(10, TimeUnit.SECONDS);
         } else {
-            log.warn("처리할 수 없는 Outbox 토픽: {}", topic);
+            throw new IllegalArgumentException("처리할 수 없는 Outbox 토픽: " + topic);
         }
     }
 }

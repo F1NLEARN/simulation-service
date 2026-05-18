@@ -1,5 +1,7 @@
 package com.finlearn.simulationservice.application.investment.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.investment.dto.request.BuyOrderRequest;
 import com.finlearn.simulationservice.application.investment.dto.request.SellOrderRequest;
 import com.finlearn.simulationservice.application.investment.dto.response.BuyStockResponse;
@@ -10,22 +12,32 @@ import com.finlearn.simulationservice.domain.holding.repository.HoldingRepositor
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.InvestmentAccountStatus;
+import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
 import com.finlearn.simulationservice.domain.investment.enums.StockPriceSource;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentErrorCode;
 import com.finlearn.simulationservice.domain.investment.exception.InvestmentException;
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
+import com.finlearn.simulationservice.domain.outbox.entity.OutboxEvent;
+import com.finlearn.simulationservice.domain.outbox.repository.OutboxEventRepository;
 import com.finlearn.simulationservice.domain.tradehistory.entity.TradeHistory;
-import com.finlearn.simulationservice.domain.tradehistory.event.TradeCompletedEvent;
 import com.finlearn.simulationservice.domain.tradehistory.repository.TradeHistoryRepository;
-import java.time.LocalDateTime;
-import java.util.Optional;
-import java.util.UUID;
+import com.finlearn.simulationservice.infrastructure.kafka.KafkaTopics;
+import com.finlearn.simulationservice.infrastructure.kafka.event.PortfolioSnapshotEvent;
+import com.finlearn.simulationservice.infrastructure.kafka.event.TradeExecutedEvent;
 import lombok.RequiredArgsConstructor;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -41,7 +53,8 @@ public class InvestmentOrderService {
     private final StockPriceRepository stockPriceRepository;
     private final HoldingRepository holdingRepository;
     private final TradeHistoryRepository tradeHistoryRepository;
-    private final ApplicationEventPublisher eventPublisher;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
 
     @Transactional
     public BuyStockResponse buy(UUID userId, BuyOrderRequest request) {
@@ -96,10 +109,7 @@ public class InvestmentOrderService {
         );
         tradeHistoryRepository.save(tradeHistory);
 
-        eventPublisher.publishEvent(new TradeCompletedEvent(
-                userId, account.getAccountId(), account.getParticipant().getSeasonId(),
-                "BUY", stockItem.getAssetType().name(), normalizedStockCode, executedAt
-        ));
+        saveOutboxEvents(userId, account, stockItem, normalizedStockCode, "BUY", executedAt);
 
         return new BuyStockResponse(
                 account.getAccountId(),
@@ -165,10 +175,7 @@ public class InvestmentOrderService {
         );
         tradeHistoryRepository.save(tradeHistory);
 
-        eventPublisher.publishEvent(new TradeCompletedEvent(
-                userId, account.getAccountId(), account.getParticipant().getSeasonId(),
-                "SELL", stockItem.getAssetType().name(), normalizedStockCode, executedAt
-        ));
+        saveOutboxEvents(userId, account, stockItem, normalizedStockCode, "SELL", executedAt);
 
         return new SellStockResponse(
                 normalizedStockCode,
@@ -179,6 +186,76 @@ public class InvestmentOrderService {
                 remainingQuantity,
                 cashBalanceAfterTrade
         );
+    }
+
+    private void saveOutboxEvents(UUID userId, InvestmentAccount account, StockItem stockItem,
+                                  String stockCode, String tradeType, LocalDateTime executedAt) {
+        UUID accountId = account.getAccountId();
+        UUID seasonId = account.getParticipant().getSeasonId();
+
+        TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
+                userId, accountId, seasonId,
+                tradeType, stockItem.getAssetType().name(), stockCode, executedAt
+        );
+        outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
+
+        List<Holding> holdings = holdingRepository.findAllWithFilter(accountId, null);
+        PortfolioSnapshotEvent snapshotEvent = buildSnapshotEvent(
+                userId, accountId, seasonId, holdings, executedAt);
+        outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));
+    }
+
+    private PortfolioSnapshotEvent buildSnapshotEvent(UUID userId, UUID accountId, UUID seasonId,
+                                                      List<Holding> holdings, LocalDateTime updatedAt) {
+        Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
+                stockItemRepository.findAllByStockCodeIn(
+                        holdings.stream().map(h -> h.getInstrumentCode().getValue()).toList()
+                ).stream().collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+
+        BigDecimal overallReturnRate = computeReturnRate(holdings, assetTypeMap, null);
+        BigDecimal stockReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.STOCK);
+        BigDecimal etfReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.ETF);
+
+        int stockHoldingCount = (int) holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.STOCK)
+                .count();
+        int etfHoldingCount = (int) holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.ETF)
+                .count();
+
+        return new PortfolioSnapshotEvent(
+                userId, accountId, seasonId,
+                overallReturnRate, stockReturnRate, etfReturnRate,
+                stockHoldingCount, etfHoldingCount, updatedAt
+        );
+    }
+
+    private BigDecimal computeReturnRate(List<Holding> holdings, Map<String, StockAssetType> assetTypeMap,
+                                         StockAssetType targetType) {
+        List<Holding> filtered = targetType == null ? holdings : holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == targetType)
+                .toList();
+
+        long totalBuyAmount = filtered.stream().mapToLong(Holding::getTotalBuyAmount).sum();
+        if (totalBuyAmount == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        long totalUnrealizedProfitLoss = filtered.stream().mapToLong(Holding::getUnrealizedProfitLoss).sum();
+        return BigDecimal.valueOf(totalUnrealizedProfitLoss)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalBuyAmount), 2, RoundingMode.HALF_UP);
+    }
+
+    private String toJson(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Outbox 이벤트 직렬화 실패: " + event.getClass().getSimpleName(), e);
+        }
     }
 
     private String normalizeStockCode(String stockCode) {

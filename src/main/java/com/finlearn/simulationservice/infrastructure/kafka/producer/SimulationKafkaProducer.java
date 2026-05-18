@@ -6,7 +6,10 @@ import com.finlearn.simulationservice.infrastructure.kafka.event.TradeExecutedEv
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Component;
+
+import java.util.concurrent.CompletableFuture;
 
 @Component
 @RequiredArgsConstructor
@@ -15,11 +18,11 @@ public class SimulationKafkaProducer {
 
     private final KafkaTemplate<String, Object> kafkaTemplate;
 
-    public void sendTradeExecuted(TradeExecutedEvent event) {
-        kafkaTemplate.send(KafkaTopics.TRADE_EXECUTED, event.accountId().toString(), event);
+    public CompletableFuture<SendResult<String, Object>> sendTradeExecuted(TradeExecutedEvent event) {
+        return kafkaTemplate.send(KafkaTopics.TRADE_EXECUTED, event.accountId().toString(), event);
     }
 
-    public void sendPortfolioSnapshot(PortfolioSnapshotEvent event) {
-        kafkaTemplate.send(KafkaTopics.PORTFOLIO_SNAPSHOT, event.accountId().toString(), event);
+    public CompletableFuture<SendResult<String, Object>> sendPortfolioSnapshot(PortfolioSnapshotEvent event) {
+        return kafkaTemplate.send(KafkaTopics.PORTFOLIO_SNAPSHOT, event.accountId().toString(), event);
     }
 }

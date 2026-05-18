@@ -19,7 +19,8 @@ public record InvestmentAccountResponse(
         BigDecimal initialSeedMoney = BigDecimal.valueOf(account.getInitialSeedMoney());
         BigDecimal cashBalance = BigDecimal.valueOf(account.getCurrentCashBalance());
         BigDecimal totalEvaluationAmount = BigDecimal.valueOf(account.getTotalValuationAmount());
-        BigDecimal totalProfitLoss = totalEvaluationAmount.subtract(initialSeedMoney);
+        BigDecimal totalAssetAmount = BigDecimal.valueOf(account.getTotalAssetAmount());
+        BigDecimal totalProfitLoss = totalAssetAmount.subtract(initialSeedMoney);
         BigDecimal totalProfitRate = account.getTotalReturnRate();
 
         return new InvestmentAccountResponse(

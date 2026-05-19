@@ -55,17 +55,22 @@ public class TradeKafkaEventListener {
                         h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
                 .count();
         double returnRate = account != null ? account.getTotalReturnRate().doubleValue() : 0.0;
+        double overallReturnRate = computeReturnRate(holdings, assetTypeMap, null).doubleValue();
+        double stockReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.STOCK).doubleValue();
+        double etfReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.ETF).doubleValue();
 
         kafkaProducer.sendTradeExecuted(new TradeExecutedEvent(
                 event.userId(), event.accountId(), event.seasonId(), seasonNumber,
                 event.tradeType(), event.assetType(), event.stockCode(),
-                holdCount, returnRate, userNickname, event.executedAt()
+                holdCount, returnRate, overallReturnRate, stockReturnRate, etfReturnRate,
+                userNickname, event.executedAt()
         ));
 
-        kafkaProducer.sendPortfolioSnapshot(buildSnapshotEvent(event, holdings));
+        kafkaProducer.sendPortfolioSnapshot(buildSnapshotEvent(event, holdings, seasonNumber, userNickname));
     }
 
-    private PortfolioSnapshotEvent buildSnapshotEvent(TradeCompletedEvent event, List<Holding> holdings) {
+    private PortfolioSnapshotEvent buildSnapshotEvent(TradeCompletedEvent event, List<Holding> holdings,
+                                                       int seasonNumber, String userNickname) {
         Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
                 stockItemRepository.findAllByStockCodeIn(
                         holdings.stream().map(h -> h.getInstrumentCode().getValue()).toList()
@@ -86,6 +91,7 @@ public class TradeKafkaEventListener {
 
         return new PortfolioSnapshotEvent(
                 event.userId(), event.accountId(), event.seasonId(),
+                seasonNumber, userNickname,
                 overallReturnRate, stockReturnRate, etfReturnRate,
                 stockHoldingCount, etfHoldingCount, event.executedAt()
         );

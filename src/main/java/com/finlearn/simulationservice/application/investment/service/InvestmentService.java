@@ -37,7 +37,10 @@ import com.finlearn.simulationservice.domain.investment.repository.StockPriceRep
 import com.finlearn.simulationservice.domain.outbox.entity.OutboxEvent;
 import com.finlearn.simulationservice.domain.outbox.repository.OutboxEventRepository;
 import com.finlearn.simulationservice.infrastructure.kafka.KafkaTopics;
+import com.finlearn.simulationservice.infrastructure.kafka.event.PortfolioSnapshotEvent;
 import com.finlearn.simulationservice.infrastructure.kafka.event.TradeExecutedEvent;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -309,13 +312,52 @@ public class InvestmentService {
         int holdCount = (int) sameAssetCount + ("BUY".equals(tradeType) && isNewInstrument ? 1 : 0);
 
         double returnRate = account.getTotalReturnRate().doubleValue();
+        double overallReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, null).doubleValue();
+        double stockReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, StockAssetType.STOCK).doubleValue();
+        double etfReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, StockAssetType.ETF).doubleValue();
 
         TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
                 userId, accountId, seasonId, seasonNumber,
                 tradeType, currentAssetType.name(), stockItem.getStockCode(),
-                holdCount, returnRate, userNickname, LocalDateTime.now()
+                holdCount, returnRate, overallReturnRate, stockReturnRate, etfReturnRate,
+                userNickname, LocalDateTime.now()
         );
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
+
+        int stockHoldingCount = (int) currentHoldings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.STOCK)
+                .count();
+        int etfHoldingCount = (int) currentHoldings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.ETF)
+                .count();
+
+        PortfolioSnapshotEvent snapshotEvent = new PortfolioSnapshotEvent(
+                userId, accountId, seasonId, seasonNumber, userNickname,
+                BigDecimal.valueOf(overallReturnRate), BigDecimal.valueOf(stockReturnRate),
+                BigDecimal.valueOf(etfReturnRate),
+                stockHoldingCount, etfHoldingCount, LocalDateTime.now()
+        );
+        outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));
+    }
+
+    private BigDecimal computePortfolioReturnRate(List<Holding> holdings, Map<String, StockAssetType> assetTypeMap,
+                                                   StockAssetType targetType) {
+        List<Holding> filtered = targetType == null ? holdings : holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == targetType)
+                .toList();
+
+        long totalBuyAmount = filtered.stream().mapToLong(Holding::getTotalBuyAmount).sum();
+        if (totalBuyAmount == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        long totalUnrealizedProfitLoss = filtered.stream().mapToLong(Holding::getUnrealizedProfitLoss).sum();
+        return BigDecimal.valueOf(totalUnrealizedProfitLoss)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalBuyAmount), 2, RoundingMode.HALF_UP);
     }
 
     private String toJson(Object event) {

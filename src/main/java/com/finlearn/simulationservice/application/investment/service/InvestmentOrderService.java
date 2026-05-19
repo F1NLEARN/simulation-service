@@ -192,14 +192,30 @@ public class InvestmentOrderService {
                                   String stockCode, String tradeType, LocalDateTime executedAt) {
         UUID accountId = account.getAccountId();
         UUID seasonId = account.getParticipant().getSeasonId();
+        int seasonNumber = account.getParticipant().getSeasonNumber();
+        String userNickname = account.getParticipant().getInvestorName();
+
+        List<Holding> holdings = holdingRepository.findAllWithFilter(accountId, null);
+
+        StockAssetType currentAssetType = stockItem.getAssetType();
+        Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
+                stockItemRepository.findAllByStockCodeIn(
+                        holdings.stream().map(h -> h.getInstrumentCode().getValue()).toList()
+                ).stream().collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+
+        int holdCount = (int) holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
+                .count();
+        double returnRate = computeReturnRate(holdings, assetTypeMap, currentAssetType).doubleValue();
 
         TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
-                userId, accountId, seasonId,
-                tradeType, stockItem.getAssetType().name(), stockCode, executedAt
+                userId, accountId, seasonId, seasonNumber,
+                tradeType, currentAssetType.name(), stockCode,
+                holdCount, returnRate, userNickname, executedAt
         );
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
 
-        List<Holding> holdings = holdingRepository.findAllWithFilter(accountId, null);
         PortfolioSnapshotEvent snapshotEvent = buildSnapshotEvent(
                 userId, accountId, seasonId, holdings, executedAt);
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));

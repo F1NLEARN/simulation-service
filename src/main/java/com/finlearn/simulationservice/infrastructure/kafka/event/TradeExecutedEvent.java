@@ -13,6 +13,9 @@ public record TradeExecutedEvent(
         String stockCode,
         int holdCount,
         double returnRate,
+        double overallReturnRate,
+        double stockReturnRate,
+        double etfReturnRate,
         String userNickname,
         LocalDateTime executedAt
 ) {}

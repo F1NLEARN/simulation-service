@@ -8,6 +8,8 @@ public record PortfolioSnapshotEvent(
         UUID userId,
         UUID accountId,
         UUID seasonId,
+        int seasonNumber,
+        String userNickname,
         BigDecimal overallReturnRate,
         BigDecimal stockReturnRate,
         BigDecimal etfReturnRate,

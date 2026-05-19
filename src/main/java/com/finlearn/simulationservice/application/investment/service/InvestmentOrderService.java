@@ -208,20 +208,25 @@ public class InvestmentOrderService {
                         h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
                 .count();
         double returnRate = computeReturnRate(holdings, assetTypeMap, currentAssetType).doubleValue();
+        double overallReturnRate = computeReturnRate(holdings, assetTypeMap, null).doubleValue();
+        double stockReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.STOCK).doubleValue();
+        double etfReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.ETF).doubleValue();
 
         TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
                 userId, accountId, seasonId, seasonNumber,
                 tradeType, currentAssetType.name(), stockCode,
-                holdCount, returnRate, userNickname, executedAt
+                holdCount, returnRate, overallReturnRate, stockReturnRate, etfReturnRate,
+                userNickname, executedAt
         );
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
 
         PortfolioSnapshotEvent snapshotEvent = buildSnapshotEvent(
-                userId, accountId, seasonId, holdings, executedAt);
+                userId, accountId, seasonId, seasonNumber, userNickname, holdings, executedAt);
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));
     }
 
     private PortfolioSnapshotEvent buildSnapshotEvent(UUID userId, UUID accountId, UUID seasonId,
+                                                      int seasonNumber, String userNickname,
                                                       List<Holding> holdings, LocalDateTime updatedAt) {
         Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
                 stockItemRepository.findAllByStockCodeIn(
@@ -242,7 +247,7 @@ public class InvestmentOrderService {
                 .count();
 
         return new PortfolioSnapshotEvent(
-                userId, accountId, seasonId,
+                userId, accountId, seasonId, seasonNumber, userNickname,
                 overallReturnRate, stockReturnRate, etfReturnRate,
                 stockHoldingCount, etfHoldingCount, updatedAt
         );

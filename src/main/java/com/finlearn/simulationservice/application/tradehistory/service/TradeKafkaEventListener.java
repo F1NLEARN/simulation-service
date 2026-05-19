@@ -2,8 +2,10 @@ package com.finlearn.simulationservice.application.tradehistory.service;
 
 import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
+import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.tradehistory.event.TradeCompletedEvent;
 import com.finlearn.simulationservice.infrastructure.kafka.event.PortfolioSnapshotEvent;
@@ -30,17 +32,36 @@ public class TradeKafkaEventListener {
 
     private final HoldingRepository holdingRepository;
     private final StockItemRepository stockItemRepository;
+    private final InvestmentAccountRepository investmentAccountRepository;
     private final SimulationKafkaProducer kafkaProducer;
 
     @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
     @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = true)
     public void onTradeCompleted(TradeCompletedEvent event) {
+        List<Holding> holdings = holdingRepository.findAllWithFilter(event.accountId(), null);
+
+        InvestmentAccount account = investmentAccountRepository.findById(event.accountId()).orElse(null);
+        int seasonNumber = account != null ? account.getParticipant().getSeasonNumber() : 0;
+        String userNickname = account != null ? account.getParticipant().getInvestorName() : null;
+
+        StockAssetType currentAssetType = StockAssetType.valueOf(event.assetType());
+        Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
+                stockItemRepository.findAllByStockCodeIn(
+                        holdings.stream().map(h -> h.getInstrumentCode().getValue()).toList()
+                ).stream().collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+
+        int holdCount = (int) holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
+                .count();
+        double returnRate = account != null ? account.getTotalReturnRate().doubleValue() : 0.0;
+
         kafkaProducer.sendTradeExecuted(new TradeExecutedEvent(
-                event.userId(), event.accountId(), event.seasonId(),
-                event.tradeType(), event.assetType(), event.stockCode(), event.executedAt()
+                event.userId(), event.accountId(), event.seasonId(), seasonNumber,
+                event.tradeType(), event.assetType(), event.stockCode(),
+                holdCount, returnRate, userNickname, event.executedAt()
         ));
 
-        List<Holding> holdings = holdingRepository.findAllWithFilter(event.accountId(), null);
         kafkaProducer.sendPortfolioSnapshot(buildSnapshotEvent(event, holdings));
     }
 

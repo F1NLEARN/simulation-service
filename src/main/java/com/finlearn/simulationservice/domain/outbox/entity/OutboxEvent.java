@@ -48,6 +48,10 @@ public class OutboxEvent extends BaseEntity {
         return event;
     }
 
+    public void markProcessing() {
+        this.status = OutboxEventStatus.PROCESSING;
+    }
+
     public void markPublished() {
         this.status = OutboxEventStatus.PUBLISHED;
         this.publishedAt = LocalDateTime.now();

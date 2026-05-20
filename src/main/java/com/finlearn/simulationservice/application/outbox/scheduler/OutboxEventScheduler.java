@@ -28,10 +28,21 @@ public class OutboxEventScheduler {
     private final SimulationKafkaProducer kafkaProducer;
     private final ObjectMapper objectMapper;
 
+    /**
+     * PENDING 이벤트를 PROCESSING으로 선점(비관적 잠금)한 뒤 Kafka 발행.
+     * - PESSIMISTIC_WRITE 잠금으로 다중 인스턴스 중복 발행 방지
+     * - kafkaTemplate.send() get(10s)으로 브로커 전송 완료 확인 후 PUBLISHED 처리
+     * - 알 수 없는 토픽은 예외를 던져 FAILED로 저장 (PENDING 영구화 방지)
+     */
     @Scheduled(fixedDelay = 5000)
     @Transactional
     public void publishPendingEvents() {
-        List<OutboxEvent> pendingEvents = outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING);
+        List<OutboxEvent> pendingEvents = outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING);
+
+        for (OutboxEvent event : pendingEvents) {
+            event.markProcessing();
+            outboxEventRepository.save(event);
+        }
 
         for (OutboxEvent event : pendingEvents) {
             try {

@@ -10,4 +10,6 @@ public interface OutboxEventRepository {
     OutboxEvent save(OutboxEvent outboxEvent);
 
     List<OutboxEvent> findAllByStatus(OutboxEventStatus status);
+
+    List<OutboxEvent> findAllByStatusForUpdate(OutboxEventStatus status);
 }

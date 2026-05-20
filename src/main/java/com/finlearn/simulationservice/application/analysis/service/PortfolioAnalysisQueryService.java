@@ -22,6 +22,7 @@ import com.finlearn.simulationservice.domain.investment.exception.InvestmentExce
 import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
@@ -35,6 +36,7 @@ import java.util.Objects;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -57,12 +59,27 @@ public class PortfolioAnalysisQueryService {
                 resolvedRecommendations, data.stockReturnRate(), data.etfReturnRate());
     }
 
+    /**
+     * AI 분석을 1순위로 시도하고, 실패 시 규칙 기반 결과로 폴백.
+     */
     @CacheEvict(value = "portfolioAnalysis", key = "#investorId")
+    @Transactional
     public PortfolioAnalysisResponse refresh(UUID investorId) {
         PortfolioAnalysisData data = computePortfolioData(investorId);
-        aiAnalysisService.createAsync(data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations());
+        List<PortfolioRecommendation> recommendations;
+
+        try {
+            recommendations = aiAnalysisService.callAndSave(
+                    data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations());
+        } catch (Exception e) {
+            log.warn("[PortfolioAnalysis] AI 분석 실패 - 규칙 기반 결과로 대체: {}", e.getMessage());
+            aiAnalysisService.saveFailed(
+                    data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations(), e.getMessage());
+            recommendations = data.diagnosis().recommendations();
+        }
+
         return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(),
-                data.diagnosis().recommendations(), data.stockReturnRate(), data.etfReturnRate());
+                recommendations, data.stockReturnRate(), data.etfReturnRate());
     }
 
     @CacheEvict(value = "portfolioAnalysis", key = "#investorId")

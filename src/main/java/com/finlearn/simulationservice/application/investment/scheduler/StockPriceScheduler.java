@@ -50,6 +50,11 @@ public class StockPriceScheduler {
                     stock.updateCurrentPrice(price, LocalDateTime.now());
                     updatedCount++;
                 }
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("[StockPriceScheduler] 가격 갱신 인터럽트 - 중단");
+                break;
             } catch (Exception e) {
                 log.warn("[StockPriceScheduler] 가격 갱신 실패 - stockCode={}, reason={}", stock.getStockCode(), e.getMessage());
             }

@@ -22,7 +22,6 @@ import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.core.io.Resource;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -67,44 +66,57 @@ public class AiAnalysisService {
                 .build();
     }
 
-    @Async("aiAnalysisExecutor")
+    /**
+     * OpenAI 호출 → 분석 결과 저장 → 병합된 recommendations 반환.
+     * 실패 시 예외를 그대로 던져 호출부에서 폴백 처리하도록 함.
+     */
     @Transactional
-    public void createAsync(InvestmentAccount account,
-                            PortfolioDiagnosis diagnosis,
-                            PortfolioAllocationResponse allocation,
-                            List<PortfolioRecommendation> ruleBasedRecommendations) {
+    public List<PortfolioRecommendation> callAndSave(InvestmentAccount account,
+                                                      PortfolioDiagnosis diagnosis,
+                                                      PortfolioAllocationResponse allocation,
+                                                      List<PortfolioRecommendation> ruleBasedRecommendations) {
         String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
-        UUID investorId = account.getParticipant().getInvestorId();
 
-        try {
-            String rawResponse = chatClient.prompt()
-                    .system(systemPrompt)
-                    .user(userPrompt)
-                    .call()
-                    .content();
+        String rawResponse = chatClient.prompt()
+                .system(systemPrompt)
+                .user(userPrompt)
+                .call()
+                .content();
 
-            List<PortfolioRecommendation> aiParsed = parseRecommendations(rawResponse);
+        List<PortfolioRecommendation> aiParsed = parseRecommendations(rawResponse);
 
-            if (aiParsed.size() != ruleBasedRecommendations.size()) {
-                throw new IllegalStateException("AI 응답 항목 수 불일치");
-            }
-
-            List<PortfolioRecommendation> merged = mergeRecommendations(ruleBasedRecommendations, aiParsed);
-            String aiFeedbackJson = objectMapper.writeValueAsString(merged);
-
-            AiAnalysis analysis = AiAnalysis.create(
-                    buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, userPrompt));
-            analysis.complete();
-            aiAnalysisRepository.save(analysis);
-
-            cacheManager.getCache("portfolioAnalysis").evict(investorId);
-
-        } catch (Exception e) {
-            AiAnalysis analysis = AiAnalysis.create(
-                    buildCommand(account, diagnosis, allocation, "N/A", null, userPrompt));
-            analysis.fail(e.getMessage());
-            aiAnalysisRepository.save(analysis);
+        if (aiParsed.size() != ruleBasedRecommendations.size()) {
+            throw new IllegalStateException("AI 응답 항목 수 불일치: expected=" + ruleBasedRecommendations.size()
+                    + ", actual=" + aiParsed.size());
         }
+
+        List<PortfolioRecommendation> merged = mergeRecommendations(ruleBasedRecommendations, aiParsed);
+        String aiFeedbackJson = objectMapper.writeValueAsString(merged);
+
+        AiAnalysis analysis = AiAnalysis.create(
+                buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, userPrompt));
+        analysis.complete();
+        aiAnalysisRepository.save(analysis);
+
+        cacheManager.getCache("portfolioAnalysis").evict(account.getParticipant().getInvestorId());
+
+        return merged;
+    }
+
+    /**
+     * AI 호출 실패 시 FAILED 이력만 저장 (폴백 경로에서 호출).
+     */
+    @Transactional
+    public void saveFailed(InvestmentAccount account,
+                           PortfolioDiagnosis diagnosis,
+                           PortfolioAllocationResponse allocation,
+                           List<PortfolioRecommendation> ruleBasedRecommendations,
+                           String errorMessage) {
+        String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
+        AiAnalysis analysis = AiAnalysis.create(
+                buildCommand(account, diagnosis, allocation, "N/A", null, userPrompt));
+        analysis.fail(errorMessage);
+        aiAnalysisRepository.save(analysis);
     }
 
     private List<PortfolioRecommendation> mergeRecommendations(

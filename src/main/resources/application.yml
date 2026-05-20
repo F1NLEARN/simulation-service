@@ -60,3 +60,6 @@ kafka:
 
 stock-price-scheduler:
   interval-ms: ${STOCK_PRICE_SCHEDULER_INTERVAL_MS:60000}
+
+portfolio-sync-scheduler:
+  interval-ms: ${PORTFOLIO_SYNC_SCHEDULER_INTERVAL_MS:300000}

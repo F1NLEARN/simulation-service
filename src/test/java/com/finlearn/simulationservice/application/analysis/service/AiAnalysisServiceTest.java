@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -101,7 +102,7 @@ class AiAnalysisServiceTest {
 
     @Test
     @DisplayName("AI 응답 성공 시 COMPLETED 상태로 저장되고 캐시가 무효화된다.")
-    void createAsync_success_savesCompletedAnalysisAndEvictsCache() {
+    void callAndSave_success_savesCompletedAnalysisAndEvictsCache() throws Exception {
         String aiResponse = """
                 {
                   "recommendations": [
@@ -124,7 +125,8 @@ class AiAnalysisServiceTest {
         when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+        List<PortfolioRecommendation> result =
+                aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations);
 
         ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
         verify(aiAnalysisRepository).save(captor.capture());
@@ -135,11 +137,14 @@ class AiAnalysisServiceTest {
         assertThat(saved.getAiFeedbackMessage()).contains("AI가 재작성한 이유");
         assertThat(saved.getAccountId()).isEqualTo(ACCOUNT_ID);
         assertThat(saved.getFailureReason()).isNull();
+
+        assertThat(result).hasSize(2);
+        assertThat(result.get(0).reason()).isEqualTo("AI가 재작성한 이유");
     }
 
     @Test
     @DisplayName("성공 시 원본 recommendationType, targetCategory를 유지하고 AI의 reason, message만 병합한다.")
-    void createAsync_success_mergesOnlyReasonAndMessage() {
+    void callAndSave_success_mergesOnlyReasonAndMessage() throws Exception {
         String aiResponse = """
                 {
                   "recommendations": [
@@ -162,7 +167,8 @@ class AiAnalysisServiceTest {
         when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+        List<PortfolioRecommendation> result =
+                aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations);
 
         ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
         verify(aiAnalysisRepository).save(captor.capture());
@@ -173,27 +179,26 @@ class AiAnalysisServiceTest {
         assertThat(savedJson).contains("AI가 재작성한 이유");
         assertThat(savedJson).contains("AI ETF 이유");
         assertThat(savedJson).doesNotContain("FOREIGN_ETF");
+
+        // 원본 타입/카테고리 유지 확인
+        assertThat(result.get(0).recommendationType()).isEqualTo(RecommendationType.PORTFOLIO);
+        assertThat(result.get(1).targetCategory()).isEqualTo("DOMESTIC_ETF");
     }
 
     @Test
-    @DisplayName("AI 호출 실패 시 FAILED 상태로 저장된다.")
-    void createAsync_openAiError_savesFailedAnalysis() {
+    @DisplayName("AI 호출 실패 시 예외를 던져 호출부가 폴백 처리할 수 있게 한다.")
+    void callAndSave_openAiError_throwsException() {
         when(callSpec.content()).thenThrow(new RuntimeException("API timeout"));
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
-
-        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
-        verify(aiAnalysisRepository).save(captor.capture());
-
-        AiAnalysis saved = captor.getValue();
-        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
-        assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
-        assertThat(saved.getFailureReason()).isEqualTo("API timeout");
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("API timeout");
     }
 
     @Test
-    @DisplayName("AI 응답 항목 수가 룰 기반과 다르면 FAILED 상태로 저장된다.")
-    void createAsync_countMismatch_savesFailedAnalysis() {
+    @DisplayName("AI 응답 항목 수가 룰 기반과 다르면 IllegalStateException을 던진다.")
+    void callAndSave_countMismatch_throwsIllegalStateException() {
         String mismatchedResponse = """
                 {
                   "recommendations": [
@@ -208,23 +213,26 @@ class AiAnalysisServiceTest {
 
         when(callSpec.content()).thenReturn(mismatchedResponse);
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
-
-        ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
-        verify(aiAnalysisRepository).save(captor.capture());
-
-        AiAnalysis saved = captor.getValue();
-        assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
-        assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
-        assertThat(saved.getFailureReason()).contains("AI 응답 항목 수 불일치");
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 항목 수 불일치");
     }
 
     @Test
-    @DisplayName("AI 응답 JSON 파싱 실패 시 FAILED 상태로 저장된다.")
-    void createAsync_invalidJson_savesFailedAnalysis() {
+    @DisplayName("AI 응답 JSON 파싱 실패 시 예외를 던진다.")
+    void callAndSave_invalidJson_throwsException() {
         when(callSpec.content()).thenReturn("invalid json");
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations))
+                .isInstanceOf(Exception.class);
+    }
+
+    @Test
+    @DisplayName("saveFailed 호출 시 FAILED 상태로 저장된다.")
+    void saveFailed_savesFailedAnalysis() {
+        aiAnalysisService.saveFailed(account, diagnosis, allocation, ruleBasedRecommendations, "API timeout");
 
         ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
         verify(aiAnalysisRepository).save(captor.capture());
@@ -232,11 +240,12 @@ class AiAnalysisServiceTest {
         AiAnalysis saved = captor.getValue();
         assertThat(saved.getAnalysisStatus()).isEqualTo(AnalysisStatus.FAILED);
         assertThat(saved.getAiFeedbackMessage()).isEqualTo("N/A");
+        assertThat(saved.getFailureReason()).isEqualTo("API timeout");
     }
 
     @Test
     @DisplayName("성공 시 QUIZ 타입 recommendations의 첫 번째 targetCategory가 추천 학습 주제로 저장된다.")
-    void createAsync_success_setsRecommendedLearningTopicFromQuiz() {
+    void callAndSave_success_setsRecommendedLearningTopicFromQuiz() throws Exception {
         String aiResponse = """
                 {
                   "recommendations": [
@@ -259,7 +268,7 @@ class AiAnalysisServiceTest {
         when(callSpec.content()).thenReturn(aiResponse);
         when(cacheManager.getCache("portfolioAnalysis")).thenReturn(mockCache);
 
-        aiAnalysisService.createAsync(account, diagnosis, allocation, ruleBasedRecommendations);
+        aiAnalysisService.callAndSave(account, diagnosis, allocation, ruleBasedRecommendations);
 
         ArgumentCaptor<AiAnalysis> captor = ArgumentCaptor.forClass(AiAnalysis.class);
         verify(aiAnalysisRepository).save(captor.capture());

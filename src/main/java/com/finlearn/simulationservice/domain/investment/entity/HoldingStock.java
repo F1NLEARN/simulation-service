@@ -41,7 +41,7 @@ public class HoldingStock extends BaseEntity {
     @JoinColumn(name = "account_id", nullable = false)
     private InvestmentAccount investmentAccount;
 
-    @Column(name = "holding_name", nullable = false, length = 10)
+    @Column(name = "holding_name", nullable = false, length = 50)
     private String holdingName;
 
     @Column(name = "season_id", nullable = false)

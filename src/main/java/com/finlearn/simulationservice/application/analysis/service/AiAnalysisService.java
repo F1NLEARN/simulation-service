@@ -23,6 +23,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cache.CacheManager;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
@@ -70,7 +71,7 @@ public class AiAnalysisService {
      * OpenAI 호출 → 분석 결과 저장 → 병합된 recommendations 반환.
      * 실패 시 예외를 그대로 던져 호출부에서 폴백 처리하도록 함.
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<PortfolioRecommendation> callAndSave(InvestmentAccount account,
                                                       PortfolioDiagnosis diagnosis,
                                                       PortfolioAllocationResponse allocation,
@@ -106,7 +107,7 @@ public class AiAnalysisService {
     /**
      * AI 호출 실패 시 FAILED 이력만 저장 (폴백 경로에서 호출).
      */
-    @Transactional
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveFailed(InvestmentAccount account,
                            PortfolioDiagnosis diagnosis,
                            PortfolioAllocationResponse allocation,

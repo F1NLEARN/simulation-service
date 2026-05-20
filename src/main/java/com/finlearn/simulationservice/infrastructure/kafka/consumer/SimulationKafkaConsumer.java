@@ -36,7 +36,7 @@ public class SimulationKafkaConsumer {
         }
 
         String investorName = userServiceClient.getNickname(event.userId())
-                .orElse(event.userId().toString());
+                .orElse("알 수 없음");
 
         PointQuizPassedEvent domainEvent = new PointQuizPassedEvent(
                 season.seasonId(),

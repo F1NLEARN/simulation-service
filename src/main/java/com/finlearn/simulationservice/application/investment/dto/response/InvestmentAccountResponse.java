@@ -33,4 +33,17 @@ public record InvestmentAccountResponse(
                 totalProfitRate
         );
     }
+
+    public static InvestmentAccountResponse withLiveValues(InvestmentAccount account,
+            long liveValuationAmount, long liveProfitLoss, BigDecimal liveProfitRate) {
+        return new InvestmentAccountResponse(
+                account.getAccountId(),
+                BigDecimal.valueOf(account.getCurrentCashBalance()),
+                BigDecimal.valueOf(account.getInitialSeedMoney()),
+                account.getStatus(),
+                BigDecimal.valueOf(liveValuationAmount),
+                BigDecimal.valueOf(liveProfitLoss),
+                liveProfitRate
+        );
+    }
 }

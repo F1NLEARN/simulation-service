@@ -74,7 +74,7 @@ public class AiAnalysisService {
     public List<PortfolioRecommendation> callAndSave(InvestmentAccount account,
                                                       PortfolioDiagnosis diagnosis,
                                                       PortfolioAllocationResponse allocation,
-                                                      List<PortfolioRecommendation> ruleBasedRecommendations) {
+                                                      List<PortfolioRecommendation> ruleBasedRecommendations) throws Exception {
         String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
 
         String rawResponse = chatClient.prompt()

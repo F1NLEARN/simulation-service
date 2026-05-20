@@ -192,20 +192,41 @@ public class InvestmentOrderService {
                                   String stockCode, String tradeType, LocalDateTime executedAt) {
         UUID accountId = account.getAccountId();
         UUID seasonId = account.getParticipant().getSeasonId();
+        int seasonNumber = account.getParticipant().getSeasonNumber();
+        String userNickname = account.getParticipant().getInvestorName();
+
+        List<Holding> holdings = holdingRepository.findAllWithFilter(accountId, null);
+
+        StockAssetType currentAssetType = stockItem.getAssetType();
+        Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
+                stockItemRepository.findAllByStockCodeIn(
+                        holdings.stream().map(h -> h.getInstrumentCode().getValue()).toList()
+                ).stream().collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+
+        int holdCount = (int) holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
+                .count();
+        double returnRate = computeReturnRate(holdings, assetTypeMap, currentAssetType).doubleValue();
+        double overallReturnRate = computeReturnRate(holdings, assetTypeMap, null).doubleValue();
+        double stockReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.STOCK).doubleValue();
+        double etfReturnRate = computeReturnRate(holdings, assetTypeMap, StockAssetType.ETF).doubleValue();
 
         TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
-                userId, accountId, seasonId,
-                tradeType, stockItem.getAssetType().name(), stockCode, executedAt
+                userId, accountId, seasonId, seasonNumber,
+                tradeType, currentAssetType.name(), stockCode,
+                holdCount, returnRate, overallReturnRate, stockReturnRate, etfReturnRate,
+                userNickname, executedAt
         );
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
 
-        List<Holding> holdings = holdingRepository.findAllWithFilter(accountId, null);
         PortfolioSnapshotEvent snapshotEvent = buildSnapshotEvent(
-                userId, accountId, seasonId, holdings, executedAt);
+                userId, accountId, seasonId, seasonNumber, userNickname, holdings, executedAt);
         outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));
     }
 
     private PortfolioSnapshotEvent buildSnapshotEvent(UUID userId, UUID accountId, UUID seasonId,
+                                                      int seasonNumber, String userNickname,
                                                       List<Holding> holdings, LocalDateTime updatedAt) {
         Map<String, StockAssetType> assetTypeMap = holdings.isEmpty() ? Map.of() :
                 stockItemRepository.findAllByStockCodeIn(
@@ -226,7 +247,7 @@ public class InvestmentOrderService {
                 .count();
 
         return new PortfolioSnapshotEvent(
-                userId, accountId, seasonId,
+                userId, accountId, seasonId, seasonNumber, userNickname,
                 overallReturnRate, stockReturnRate, etfReturnRate,
                 stockHoldingCount, etfHoldingCount, updatedAt
         );

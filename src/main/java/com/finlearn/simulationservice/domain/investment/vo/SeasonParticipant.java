@@ -17,7 +17,7 @@ public class SeasonParticipant {
     @Column(name = "investor_id", nullable = false)
     private UUID investorId;
 
-    @Column(name = "investor_name", nullable = false, length = 10)
+    @Column(name = "investor_name", nullable = false, length = 50)
     private String investorName;
 
     @Column(name = "season_id", nullable = false)

@@ -34,7 +34,7 @@ public class Holding extends BaseEntity {
     @Column(nullable = false)
     private UUID accountId;
 
-    @Column(nullable = false, length = 10)
+    @Column(nullable = false, length = 50)
     private String holdingName;
 
     @Column(nullable = false)

@@ -1,5 +1,7 @@
 package com.finlearn.simulationservice.application.investment.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.investment.dto.request.BuyStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.request.RegisterFavoriteStockRequest;
 import com.finlearn.simulationservice.application.investment.dto.request.SellStockRequest;
@@ -7,6 +9,8 @@ import com.finlearn.simulationservice.application.investment.dto.response.Favori
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemDetailResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
+import com.finlearn.simulationservice.domain.holding.entity.Holding;
+import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.dto.ResolvedStockPrice;
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
@@ -30,6 +34,13 @@ import com.finlearn.simulationservice.domain.investment.repository.InvestmentAcc
 import com.finlearn.simulationservice.domain.investment.repository.SeedMoneyGrantHistoryRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockPriceRepository;
+import com.finlearn.simulationservice.domain.outbox.entity.OutboxEvent;
+import com.finlearn.simulationservice.domain.outbox.repository.OutboxEventRepository;
+import com.finlearn.simulationservice.infrastructure.kafka.KafkaTopics;
+import com.finlearn.simulationservice.infrastructure.kafka.event.PortfolioSnapshotEvent;
+import com.finlearn.simulationservice.infrastructure.kafka.event.TradeExecutedEvent;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +65,9 @@ public class InvestmentService {
     private final SeedMoneyGrantHistoryRepository seedMoneyGrantHistoryRepository;
     private final StockItemRepository stockItemRepository;
     private final StockPriceRepository stockPriceRepository;
+    private final HoldingRepository holdingRepository;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
     private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
@@ -134,6 +148,7 @@ public class InvestmentService {
                 transaction.getTotalTradeAmount(),
                 transaction.getTradeAt()
         ));
+        saveTradeOutboxEvent(account, stockItem, "BUY");
     }
 
     @Transactional
@@ -144,6 +159,9 @@ public class InvestmentService {
         if (account.getStatus() != InvestmentAccountStatus.ACTIVE) {
             throw new InvestmentException(InvestmentErrorCode.INVALID_ACCOUNT_STATUS);
         }
+
+        StockItem stockItem = stockItemRepository.findByStockCode(normalizeCode(request.instrumentCode()))
+                .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_ITEM_NOT_FOUND));
 
         Long currentPrice = stockPriceRepository.findCurrentPrice(normalizeCode(request.instrumentCode()))
                 .orElseThrow(() -> new InvestmentException(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND));
@@ -166,6 +184,7 @@ public class InvestmentService {
                 transaction.getTotalTradeAmount(),
                 transaction.getTradeAt()
         ));
+        saveTradeOutboxEvent(account, stockItem, "SELL");
     }
 
     @Transactional
@@ -267,6 +286,86 @@ public class InvestmentService {
                 resolvedPrice.source(),
                 cachedAt
         );
+    }
+
+    private void saveTradeOutboxEvent(InvestmentAccount account, StockItem stockItem, String tradeType) {
+        UUID accountId = account.getAccountId();
+        UUID userId = account.getParticipant().getInvestorId();
+        UUID seasonId = account.getParticipant().getSeasonId();
+        int seasonNumber = account.getParticipant().getSeasonNumber();
+        String userNickname = account.getParticipant().getInvestorName();
+        StockAssetType currentAssetType = stockItem.getAssetType();
+
+        List<Holding> currentHoldings = holdingRepository.findAllWithFilter(accountId, null);
+        List<String> codes = currentHoldings.stream()
+                .map(h -> h.getInstrumentCode().getValue()).toList();
+        Map<String, StockAssetType> assetTypeMap = codes.isEmpty() ? Map.of() :
+                stockItemRepository.findAllByStockCodeIn(codes).stream()
+                        .collect(Collectors.toMap(StockItem::getStockCode, StockItem::getAssetType));
+
+        long sameAssetCount = currentHoldings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), currentAssetType) == currentAssetType)
+                .count();
+        boolean isNewInstrument = currentHoldings.stream()
+                .noneMatch(h -> h.getInstrumentCode().getValue().equals(stockItem.getStockCode()));
+        int holdCount = (int) sameAssetCount + ("BUY".equals(tradeType) && isNewInstrument ? 1 : 0);
+
+        double returnRate = account.getTotalReturnRate().doubleValue();
+        double overallReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, null).doubleValue();
+        double stockReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, StockAssetType.STOCK).doubleValue();
+        double etfReturnRate = computePortfolioReturnRate(currentHoldings, assetTypeMap, StockAssetType.ETF).doubleValue();
+
+        TradeExecutedEvent tradeEvent = new TradeExecutedEvent(
+                userId, accountId, seasonId, seasonNumber,
+                tradeType, currentAssetType.name(), stockItem.getStockCode(),
+                holdCount, returnRate, overallReturnRate, stockReturnRate, etfReturnRate,
+                userNickname, LocalDateTime.now()
+        );
+        outboxEventRepository.save(OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, toJson(tradeEvent)));
+
+        int stockHoldingCount = (int) currentHoldings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.STOCK)
+                .count();
+        int etfHoldingCount = (int) currentHoldings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == StockAssetType.ETF)
+                .count();
+
+        PortfolioSnapshotEvent snapshotEvent = new PortfolioSnapshotEvent(
+                userId, accountId, seasonId, seasonNumber, userNickname,
+                BigDecimal.valueOf(overallReturnRate), BigDecimal.valueOf(stockReturnRate),
+                BigDecimal.valueOf(etfReturnRate),
+                stockHoldingCount, etfHoldingCount, LocalDateTime.now()
+        );
+        outboxEventRepository.save(OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, toJson(snapshotEvent)));
+    }
+
+    private BigDecimal computePortfolioReturnRate(List<Holding> holdings, Map<String, StockAssetType> assetTypeMap,
+                                                   StockAssetType targetType) {
+        List<Holding> filtered = targetType == null ? holdings : holdings.stream()
+                .filter(h -> assetTypeMap.getOrDefault(
+                        h.getInstrumentCode().getValue(), StockAssetType.STOCK) == targetType)
+                .toList();
+
+        long totalBuyAmount = filtered.stream().mapToLong(Holding::getTotalBuyAmount).sum();
+        if (totalBuyAmount == 0) {
+            return BigDecimal.ZERO.setScale(2, RoundingMode.HALF_UP);
+        }
+
+        long totalUnrealizedProfitLoss = filtered.stream().mapToLong(Holding::getUnrealizedProfitLoss).sum();
+        return BigDecimal.valueOf(totalUnrealizedProfitLoss)
+                .multiply(BigDecimal.valueOf(100))
+                .divide(BigDecimal.valueOf(totalBuyAmount), 2, RoundingMode.HALF_UP);
+    }
+
+    private String toJson(Object event) {
+        try {
+            return objectMapper.writeValueAsString(event);
+        } catch (JsonProcessingException e) {
+            throw new IllegalStateException("Outbox 이벤트 직렬화 실패: " + event.getClass().getSimpleName(), e);
+        }
     }
 
     private Optional<ResolvedStockPrice> resolveStockPriceAndCache(String stockCode) {

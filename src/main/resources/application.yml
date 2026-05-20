@@ -50,3 +50,14 @@ external:
 stock-master:
   seed:
     enabled: ${STOCK_MASTER_SEED_ENABLED:true}
+
+kafka:
+  topics:
+    quiz:
+      graded: ${KAFKA_TOPIC_QUIZ_GRADED:quiz.graded}
+
+stock-price-scheduler:
+  interval-ms: ${STOCK_PRICE_SCHEDULER_INTERVAL_MS:60000}
+
+portfolio-sync-scheduler:
+  interval-ms: ${PORTFOLIO_SYNC_SCHEDULER_INTERVAL_MS:300000}

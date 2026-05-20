@@ -18,4 +18,4 @@ eureka:
       defaultZone: http://finlearn-eureka:8761/eureka/
 
 loki:
-  url: http://host.docker.internal:3100/loki/api/v1/push
+  url: ${LOKI_URL:http://host.docker.internal:3100/loki/api/v1/push}

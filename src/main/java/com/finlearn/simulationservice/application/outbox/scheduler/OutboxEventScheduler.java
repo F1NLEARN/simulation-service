@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 @Slf4j
 @Component
@@ -30,7 +31,7 @@ public class OutboxEventScheduler {
     /**
      * PENDING 이벤트를 PROCESSING으로 선점(비관적 잠금)한 뒤 Kafka 발행.
      * - PESSIMISTIC_WRITE 잠금으로 다중 인스턴스 중복 발행 방지
-     * - kafkaTemplate.send() future.join()으로 브로커 전송 완료 확인 후 PUBLISHED 처리
+     * - kafkaTemplate.send() get(10s)으로 브로커 전송 완료 확인 후 PUBLISHED 처리
      * - 알 수 없는 토픽은 예외를 던져 FAILED로 저장 (PENDING 영구화 방지)
      */
     @Scheduled(fixedDelay = 5000)
@@ -60,9 +61,11 @@ public class OutboxEventScheduler {
         String payload = event.getPayload();
 
         if (KafkaTopics.TRADE_EXECUTED.equals(topic)) {
-            kafkaProducer.sendTradeExecuted(objectMapper.readValue(payload, TradeExecutedEvent.class)).join();
+            kafkaProducer.sendTradeExecuted(objectMapper.readValue(payload, TradeExecutedEvent.class))
+                    .get(10, TimeUnit.SECONDS);
         } else if (KafkaTopics.PORTFOLIO_SNAPSHOT.equals(topic)) {
-            kafkaProducer.sendPortfolioSnapshot(objectMapper.readValue(payload, PortfolioSnapshotEvent.class)).join();
+            kafkaProducer.sendPortfolioSnapshot(objectMapper.readValue(payload, PortfolioSnapshotEvent.class))
+                    .get(10, TimeUnit.SECONDS);
         } else {
             throw new IllegalArgumentException("처리할 수 없는 Outbox 토픽: " + topic);
         }

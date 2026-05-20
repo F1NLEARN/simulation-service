@@ -18,8 +18,9 @@ public record InvestmentAccountResponse(
     public static InvestmentAccountResponse from(InvestmentAccount account) {
         BigDecimal initialSeedMoney = BigDecimal.valueOf(account.getInitialSeedMoney());
         BigDecimal cashBalance = BigDecimal.valueOf(account.getCurrentCashBalance());
-        BigDecimal totalEvaluationAmount = BigDecimal.valueOf(account.getTotalAssetAmount());
-        BigDecimal totalProfitLoss = totalEvaluationAmount.subtract(initialSeedMoney);
+        BigDecimal totalEvaluationAmount = BigDecimal.valueOf(account.getTotalValuationAmount());
+        BigDecimal totalAssetAmount = BigDecimal.valueOf(account.getTotalAssetAmount());
+        BigDecimal totalProfitLoss = totalAssetAmount.subtract(initialSeedMoney);
         BigDecimal totalProfitRate = account.getTotalReturnRate();
 
         return new InvestmentAccountResponse(
@@ -30,6 +31,19 @@ public record InvestmentAccountResponse(
                 totalEvaluationAmount,
                 totalProfitLoss,
                 totalProfitRate
+        );
+    }
+
+    public static InvestmentAccountResponse withLiveValues(InvestmentAccount account,
+            long liveValuationAmount, long liveProfitLoss, BigDecimal liveProfitRate) {
+        return new InvestmentAccountResponse(
+                account.getAccountId(),
+                BigDecimal.valueOf(account.getCurrentCashBalance()),
+                BigDecimal.valueOf(account.getInitialSeedMoney()),
+                account.getStatus(),
+                BigDecimal.valueOf(liveValuationAmount),
+                BigDecimal.valueOf(liveProfitLoss),
+                liveProfitRate
         );
     }
 }

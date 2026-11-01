@@ -23,10 +23,10 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -54,16 +54,47 @@ class OutboxEventSchedulerTest {
 
     private OutboxEvent pendingTradeEvent() throws Exception {
         TradeExecutedEvent dto = new TradeExecutedEvent(
-                USER_ID, ACCOUNT_ID, SEASON_ID, "BUY", "STOCK", "005930", NOW);
-        return OutboxEvent.of(KafkaTopics.TRADE_EXECUTED, objectMapper.writeValueAsString(dto));
+                USER_ID,
+                ACCOUNT_ID,
+                SEASON_ID,
+                1,
+                "BUY",
+                "STOCK",
+                "005930",
+                1,
+                5.0,
+                6.0,
+                7.0,
+                0.0,
+                "testUser",
+                NOW
+        );
+
+        return OutboxEvent.of(
+                KafkaTopics.TRADE_EXECUTED,
+                objectMapper.writeValueAsString(dto)
+        );
     }
 
     private OutboxEvent pendingSnapshotEvent() throws Exception {
         PortfolioSnapshotEvent dto = new PortfolioSnapshotEvent(
-                USER_ID, ACCOUNT_ID, SEASON_ID,
-                new BigDecimal("5.00"), new BigDecimal("10.00"), BigDecimal.ZERO,
-                1, 0, NOW);
-        return OutboxEvent.of(KafkaTopics.PORTFOLIO_SNAPSHOT, objectMapper.writeValueAsString(dto));
+                USER_ID,
+                ACCOUNT_ID,
+                SEASON_ID,
+                1,
+                "testUser",
+                new BigDecimal("5.00"),
+                new BigDecimal("10.00"),
+                BigDecimal.ZERO,
+                1,
+                0,
+                NOW
+        );
+
+        return OutboxEvent.of(
+                KafkaTopics.PORTFOLIO_SNAPSHOT,
+                objectMapper.writeValueAsString(dto)
+        );
     }
 
     // ===== 정상 발행 =====
@@ -71,7 +102,7 @@ class OutboxEventSchedulerTest {
     @Test
     @DisplayName("PENDING 이벤트가 없으면 Kafka 발행이 일어나지 않는다.")
     void publishPendingEvents_noPending_nothingPublished() {
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of());
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of());
 
         scheduler.publishPendingEvents();
 
@@ -83,8 +114,11 @@ class OutboxEventSchedulerTest {
     @DisplayName("PENDING trade.executed 이벤트가 Kafka로 발행된다.")
     void publishPendingEvents_tradeExecuted_publishedToKafka() throws Exception {
         OutboxEvent event = pendingTradeEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         scheduler.publishPendingEvents();
 
@@ -102,8 +136,12 @@ class OutboxEventSchedulerTest {
     @DisplayName("PENDING portfolio.snapshot 이벤트가 Kafka로 발행된다.")
     void publishPendingEvents_portfolioSnapshot_publishedToKafka() throws Exception {
         OutboxEvent event = pendingSnapshotEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        when(kafkaProducer.sendPortfolioSnapshot(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
 
         scheduler.publishPendingEvents();
 
@@ -119,8 +157,11 @@ class OutboxEventSchedulerTest {
     @DisplayName("Kafka 발행 성공 후 status가 PUBLISHED로 변경된다.")
     void publishPendingEvents_success_statusBecomesPublished() throws Exception {
         OutboxEvent event = pendingTradeEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         scheduler.publishPendingEvents();
 
@@ -132,8 +173,11 @@ class OutboxEventSchedulerTest {
     @DisplayName("Kafka 발행 성공 후 publishedAt이 기록된다.")
     void publishPendingEvents_success_publishedAtRecorded() throws Exception {
         OutboxEvent event = pendingTradeEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         scheduler.publishPendingEvents();
 
@@ -146,9 +190,12 @@ class OutboxEventSchedulerTest {
     @DisplayName("Kafka 발행 실패 시 status가 FAILED로 변경된다.")
     void publishPendingEvents_kafkaFails_statusBecomesFailed() throws Exception {
         OutboxEvent event = pendingTradeEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING)).thenReturn(List.of(event));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        doThrow(new RuntimeException("Kafka 브로커 연결 실패")).when(kafkaProducer).sendTradeExecuted(any());
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.failedFuture(
+                        new RuntimeException("Kafka 브로커 연결 실패")
+                ));
 
         scheduler.publishPendingEvents();
 
@@ -161,10 +208,16 @@ class OutboxEventSchedulerTest {
         OutboxEvent failEvent = pendingTradeEvent();
         OutboxEvent successEvent = pendingSnapshotEvent();
 
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING))
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING))
                 .thenReturn(List.of(failEvent, successEvent));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
-        doThrow(new RuntimeException("Kafka 오류")).when(kafkaProducer).sendTradeExecuted(any());
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.failedFuture(
+                        new RuntimeException("Kafka 브로커 연결 실패")
+                ));
+
+        when(kafkaProducer.sendPortfolioSnapshot(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
 
         scheduler.publishPendingEvents();
 
@@ -178,12 +231,18 @@ class OutboxEventSchedulerTest {
     void publishPendingEvents_saveCalledForEachEvent() throws Exception {
         OutboxEvent event1 = pendingTradeEvent();
         OutboxEvent event2 = pendingSnapshotEvent();
-        when(outboxEventRepository.findAllByStatus(OutboxEventStatus.PENDING))
+        when(outboxEventRepository.findAllByStatusForUpdate(OutboxEventStatus.PENDING))
                 .thenReturn(List.of(event1, event2));
         when(outboxEventRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
+        when(kafkaProducer.sendTradeExecuted(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
+        when(kafkaProducer.sendPortfolioSnapshot(any()))
+                .thenReturn(CompletableFuture.completedFuture(null));
+
         scheduler.publishPendingEvents();
 
-        verify(outboxEventRepository, times(2)).save(any(OutboxEvent.class));
+        verify(outboxEventRepository, times(4)).save(any(OutboxEvent.class));
     }
 }

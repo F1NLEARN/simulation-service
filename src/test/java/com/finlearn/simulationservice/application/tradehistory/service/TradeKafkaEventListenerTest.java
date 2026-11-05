@@ -5,6 +5,7 @@ import com.finlearn.simulationservice.domain.holding.entity.Holding;
 import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.entity.StockItem;
 import com.finlearn.simulationservice.domain.investment.enums.StockAssetType;
+import com.finlearn.simulationservice.domain.investment.repository.InvestmentAccountRepository;
 import com.finlearn.simulationservice.domain.investment.repository.StockItemRepository;
 import com.finlearn.simulationservice.domain.tradehistory.event.TradeCompletedEvent;
 import com.finlearn.simulationservice.infrastructure.kafka.event.PortfolioSnapshotEvent;
@@ -34,6 +35,7 @@ class TradeKafkaEventListenerTest {
     @Mock private HoldingRepository holdingRepository;
     @Mock private StockItemRepository stockItemRepository;
     @Mock private SimulationKafkaProducer kafkaProducer;
+    @Mock private InvestmentAccountRepository investmentAccountRepository;
 
     @InjectMocks
     private TradeKafkaEventListener listener;

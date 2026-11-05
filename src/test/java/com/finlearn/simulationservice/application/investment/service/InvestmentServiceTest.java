@@ -6,6 +6,7 @@ import com.finlearn.simulationservice.application.investment.dto.request.SellSto
 import com.finlearn.simulationservice.application.investment.dto.response.FavoriteStockResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockItemListResponse;
 import com.finlearn.simulationservice.application.investment.dto.response.StockPriceResponse;
+import com.finlearn.simulationservice.domain.holding.repository.HoldingRepository;
 import com.finlearn.simulationservice.domain.investment.dto.ResolvedStockPrice;
 import com.finlearn.simulationservice.domain.investment.entity.FavoriteStock;
 import com.finlearn.simulationservice.domain.investment.entity.InvestmentAccount;
@@ -30,6 +31,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+
+import com.finlearn.simulationservice.domain.outbox.repository.OutboxEventRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -43,6 +46,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.test.util.ReflectionTestUtils;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -74,6 +78,15 @@ class InvestmentServiceTest {
 
     @Mock
     private ApplicationEventPublisher eventPublisher;
+
+    @Mock
+    private HoldingRepository holdingRepository;
+
+    @Mock
+    private OutboxEventRepository outboxEventRepository;
+
+    @Mock
+    private ObjectMapper objectMapper;
 
     @InjectMocks
     private InvestmentService investmentService;
@@ -150,7 +163,7 @@ class InvestmentServiceTest {
 
     @Test
     @DisplayName("매수 주문 성공 시 거래 이력 저장, 보유 종목 갱신, 예수금 차감 후 StockBought 이벤트를 발행한다.")
-    void buyStockSuccess() {
+    void buyStockSuccess() throws Exception {
         UUID accountId = UUID.randomUUID();
         InvestmentAccount account = InvestmentAccount.open(
                 testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
@@ -162,6 +175,11 @@ class InvestmentServiceTest {
         when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
         when(stockItemRepository.findByStockCode("005930")).thenReturn(Optional.of(stockItem));
         when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(5000L));
+        when(holdingRepository.findAllWithFilter(accountId, null))
+                .thenReturn(List.of());
+
+        when(objectMapper.writeValueAsString(any()))
+                .thenReturn("{}");
 
         investmentService.buyStock(request);
 
@@ -235,29 +253,62 @@ class InvestmentServiceTest {
         verify(eventPublisher, never()).publishEvent(any());
     }
 
+
     // ===== sellStock =====
 
     @Test
     @DisplayName("매도 주문 성공 시 거래 이력 저장, 보유 종목 수량 차감, 예수금 증가 후 StockSold 이벤트를 발행한다.")
-    void sellStockSuccess() {
+    void sellStockSuccess() throws Exception {
         UUID accountId = UUID.randomUUID();
+
         InvestmentAccount account = InvestmentAccount.open(
-                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()),
+                100000L
+        );
         ReflectionTestUtils.setField(account, "accountId", accountId);
         account.buy("005930", "삼성전자", 10, 5000L, null);
 
-        SellStockRequest request = new SellStockRequest(accountId, "005930", 10);
+        SellStockRequest request =
+                new SellStockRequest(accountId, "005930", 10);
 
-        when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(6000L));
+        StockItem stockItem = StockItem.create(
+                "삼성전자",
+                "005930",
+                StockAssetType.STOCK,
+                5000L
+        );
+
+        when(investmentAccountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        // 추가: 매도 전에 수행되는 종목 조회
+        when(stockItemRepository.findByStockCode("005930"))
+                .thenReturn(Optional.of(stockItem));
+
+        when(stockPriceRepository.findCurrentPrice("005930"))
+                .thenReturn(Optional.of(6000L));
+
+        // 추가: Outbox 이벤트 생성에 필요한 보유 종목 조회
+        when(holdingRepository.findAllWithFilter(accountId, null))
+                .thenReturn(List.of());
+
+        // 추가: Outbox 이벤트 JSON 직렬화
+        when(objectMapper.writeValueAsString(any()))
+                .thenReturn("{}");
 
         investmentService.sellStock(request);
 
-        ArgumentCaptor<InvestmentAccount> accountCaptor = ArgumentCaptor.forClass(InvestmentAccount.class);
-        verify(investmentAccountRepository, times(1)).save(accountCaptor.capture());
-        verify(eventPublisher, times(1)).publishEvent(any(StockSoldEvent.class));
+        ArgumentCaptor<InvestmentAccount> accountCaptor =
+                ArgumentCaptor.forClass(InvestmentAccount.class);
+
+        verify(investmentAccountRepository, times(1))
+                .save(accountCaptor.capture());
+
+        verify(eventPublisher, times(1))
+                .publishEvent(any(StockSoldEvent.class));
 
         InvestmentAccount saved = accountCaptor.getValue();
+
         assertEquals(110000L, saved.getCurrentCashBalance());
         assertEquals(0, saved.getHoldingStocks().size());
         assertEquals(2, saved.getStockTransactions().size());
@@ -267,19 +318,34 @@ class InvestmentServiceTest {
     @DisplayName("계좌가 ACTIVE가 아니면 매도에 실패한다.")
     void sellStockFailWhenAccountNotActive() {
         UUID accountId = UUID.randomUUID();
+
         InvestmentAccount account = InvestmentAccount.open(
-                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()),
+                100000L
+        );
+
         ReflectionTestUtils.setField(account, "accountId", accountId);
         account.close();
 
-        SellStockRequest request = new SellStockRequest(accountId, "005930", 1);
-        when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
+        SellStockRequest request =
+                new SellStockRequest(accountId, "005930", 1);
 
-        InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
+        when(investmentAccountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
 
-        assertEquals(InvestmentErrorCode.INVALID_ACCOUNT_STATUS, exception.getErrorCode());
+        InvestmentException exception = assertThrows(
+                InvestmentException.class,
+                () -> investmentService.sellStock(request)
+        );
+
+        assertEquals(
+                InvestmentErrorCode.INVALID_ACCOUNT_STATUS,
+                exception.getErrorCode()
+        );
+
         verify(stockPriceRepository, never()).findCurrentPrice(any());
-        verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
+        verify(investmentAccountRepository, never())
+                .save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 
@@ -287,18 +353,46 @@ class InvestmentServiceTest {
     @DisplayName("현재 시세가 없으면 매도에 실패한다.")
     void sellStockFailWhenStockPriceNotFound() {
         UUID accountId = UUID.randomUUID();
+
         InvestmentAccount account = InvestmentAccount.open(
-                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()),
+                100000L
+        );
+
         ReflectionTestUtils.setField(account, "accountId", accountId);
-        SellStockRequest request = new SellStockRequest(accountId, "005930", 1);
 
-        when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.empty());
+        SellStockRequest request =
+                new SellStockRequest(accountId, "005930", 1);
 
-        InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
+        StockItem stockItem = StockItem.create(
+                "삼성전자",
+                "005930",
+                StockAssetType.STOCK,
+                5000L
+        );
 
-        assertEquals(InvestmentErrorCode.STOCK_PRICE_NOT_FOUND, exception.getErrorCode());
-        verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
+        when(investmentAccountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        // 추가: 종목은 존재하지만 현재 시세가 없는 상황
+        when(stockItemRepository.findByStockCode("005930"))
+                .thenReturn(Optional.of(stockItem));
+
+        when(stockPriceRepository.findCurrentPrice("005930"))
+                .thenReturn(Optional.empty());
+
+        InvestmentException exception = assertThrows(
+                InvestmentException.class,
+                () -> investmentService.sellStock(request)
+        );
+
+        assertEquals(
+                InvestmentErrorCode.STOCK_PRICE_NOT_FOUND,
+                exception.getErrorCode()
+        );
+
+        verify(investmentAccountRepository, never())
+                .save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
 
@@ -306,21 +400,50 @@ class InvestmentServiceTest {
     @DisplayName("보유 수량이 부족하면 매도에 실패한다.")
     void sellStockFailWhenInsufficientHoldingQuantity() {
         UUID accountId = UUID.randomUUID();
+
         InvestmentAccount account = InvestmentAccount.open(
-                testParticipant(UUID.randomUUID(), UUID.randomUUID()), 100000L);
+                testParticipant(UUID.randomUUID(), UUID.randomUUID()),
+                100000L
+        );
+
         ReflectionTestUtils.setField(account, "accountId", accountId);
         account.buy("005930", "삼성전자", 1, 5000L, null);
 
-        SellStockRequest request = new SellStockRequest(accountId, "005930", 2);
-        when(investmentAccountRepository.findById(accountId)).thenReturn(Optional.of(account));
-        when(stockPriceRepository.findCurrentPrice("005930")).thenReturn(Optional.of(6000L));
+        SellStockRequest request =
+                new SellStockRequest(accountId, "005930", 2);
 
-        InvestmentException exception = assertThrows(InvestmentException.class, () -> investmentService.sellStock(request));
+        StockItem stockItem = StockItem.create(
+                "삼성전자",
+                "005930",
+                StockAssetType.STOCK,
+                5000L
+        );
 
-        assertEquals(InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY, exception.getErrorCode());
-        verify(investmentAccountRepository, never()).save(any(InvestmentAccount.class));
+        when(investmentAccountRepository.findById(accountId))
+                .thenReturn(Optional.of(account));
+
+        // 추가: 종목이 정상적으로 조회되어야 수량 검증까지 진행
+        when(stockItemRepository.findByStockCode("005930"))
+                .thenReturn(Optional.of(stockItem));
+
+        when(stockPriceRepository.findCurrentPrice("005930"))
+                .thenReturn(Optional.of(6000L));
+
+        InvestmentException exception = assertThrows(
+                InvestmentException.class,
+                () -> investmentService.sellStock(request)
+        );
+
+        assertEquals(
+                InvestmentErrorCode.INSUFFICIENT_HOLDING_QUANTITY,
+                exception.getErrorCode()
+        );
+
+        verify(investmentAccountRepository, never())
+                .save(any(InvestmentAccount.class));
         verify(eventPublisher, never()).publishEvent(any());
     }
+
 
     // ===== FavoriteStock =====
 

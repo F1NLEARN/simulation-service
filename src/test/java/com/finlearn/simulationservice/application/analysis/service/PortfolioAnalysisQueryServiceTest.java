@@ -43,6 +43,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -450,6 +451,116 @@ class PortfolioAnalysisQueryServiceTest {
         AiAnalysis analysis = AiAnalysis.create(command);
         analysis.complete();
         return analysis;
+    }
+
+    @Test
+    @DisplayName("AI 분석 실패 시 규칙 기반 추천으로 Fallback하고 실패 이력을 저장한다.")
+    void refresh_aiFailure_fallbackToRuleBased() throws Exception {
+        InvestmentAccount account = createActiveAccount();
+
+        List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(
+                        RecommendationType.PORTFOLIO,
+                        null,
+                        "룰 기반 이유",
+                        "룰 기반 메시지"
+                )
+        );
+
+        PortfolioDiagnosis diagnosis = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH,
+                RiskLevel.AGGRESSIVE,
+                "요약",
+                List.of(),
+                ruleBasedRecommendations
+        );
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(
+                INVESTOR_ID, InvestmentAccountStatus.ACTIVE
+        )).thenReturn(Optional.of(account));
+
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null))
+                .thenReturn(List.of());
+
+        when(portfolioAnalysisDomainService.diagnose(
+                any(), anyInt(), any(), any(), any()
+        )).thenReturn(diagnosis);
+
+        when(aiAnalysisService.callAndSave(
+                any(), any(), any(), any()
+        )).thenThrow(new IllegalStateException("AI 응답 추천 항목 불일치"));
+
+        PortfolioAnalysisResponse result =
+                portfolioAnalysisQueryService.refresh(INVESTOR_ID);
+
+        assertThat(result.recommendations()).hasSize(1);
+
+        assertThat(result.recommendations().get(0).reason())
+                .isEqualTo("룰 기반 이유");
+
+        assertThat(result.recommendations().get(0).message())
+                .isEqualTo("룰 기반 메시지");
+
+        verify(aiAnalysisService).saveFailed(
+                any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.eq("AI 응답 추천 항목 불일치")
+        );
+    }
+
+    @Test
+    @DisplayName("AI 분석과 실패 이력 저장이 모두 실패해도 규칙 기반 추천을 반환한다.")
+    void refresh_saveFailedError_stillFallbackToRuleBased() throws Exception {
+        InvestmentAccount account = createActiveAccount();
+
+        List<PortfolioRecommendation> ruleBasedRecommendations = List.of(
+                new PortfolioRecommendation(
+                        RecommendationType.PORTFOLIO,
+                        null,
+                        "룰 기반 이유",
+                        "룰 기반 메시지"
+                )
+        );
+
+        PortfolioDiagnosis diagnosis = new PortfolioDiagnosis(
+                ConcentrationLevel.HIGH,
+                RiskLevel.AGGRESSIVE,
+                "요약",
+                List.of(),
+                ruleBasedRecommendations
+        );
+
+        when(investmentAccountRepository.findByParticipant_InvestorIdAndStatus(
+                INVESTOR_ID, InvestmentAccountStatus.ACTIVE
+        )).thenReturn(Optional.of(account));
+
+        when(holdingRepository.findAllWithFilter(ACCOUNT_ID, null))
+                .thenReturn(List.of());
+
+        when(portfolioAnalysisDomainService.diagnose(
+                any(), anyInt(), any(), any(), any()
+        )).thenReturn(diagnosis);
+
+        when(aiAnalysisService.callAndSave(
+                any(), any(), any(), any()
+        )).thenThrow(new IllegalStateException("AI 응답 검증 실패"));
+
+        org.mockito.Mockito.doThrow(new RuntimeException("DB 저장 실패"))
+                .when(aiAnalysisService)
+                .saveFailed(any(), any(), any(), any(), any());
+
+        PortfolioAnalysisResponse result =
+                portfolioAnalysisQueryService.refresh(INVESTOR_ID);
+
+        assertThat(result.recommendations()).hasSize(1);
+        assertThat(result.recommendations().get(0).reason())
+                .isEqualTo("룰 기반 이유");
+        assertThat(result.recommendations().get(0).message())
+                .isEqualTo("룰 기반 메시지");
+
+        verify(aiAnalysisService).saveFailed(
+                any(), any(), any(), any(),
+                org.mockito.ArgumentMatchers.eq("AI 응답 검증 실패")
+        );
     }
 
 }

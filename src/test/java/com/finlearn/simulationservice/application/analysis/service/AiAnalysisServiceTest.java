@@ -217,66 +217,39 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("성공 시 원본 recommendationType, targetCategory를 유지하고 AI의 reason, message만 병합한다.")
-    void callAndSave_success_mergesOnlyReasonAndMessage()
-            throws Exception {
-
+    @DisplayName("AI 응답의 추천 유형과 대상이 규칙 기반 결과와 다르면 예외를 발생시킨다.")
+    void callAndSave_mismatchedRecommendation_throwsException() {
         mockChatClientChain();
 
         String aiResponse = """
+            {
+              "recommendations": [
                 {
-                  "recommendations": [
-                    {
-                      "recommendationType": "QUIZ",
-                      "targetCategory": "FOREIGN_ETF",
-                      "reason": "AI가 재작성한 이유",
-                      "message": "AI가 재작성한 메시지"
-                    },
-                    {
-                      "recommendationType": "PORTFOLIO",
-                      "targetCategory": null,
-                      "reason": "AI ETF 이유",
-                      "message": "AI ETF 메시지"
-                    }
-                  ]
-                }""";
+                  "recommendationType": "QUIZ",
+                  "targetCategory": "FOREIGN_ETF",
+                  "reason": "AI가 재작성한 이유",
+                  "message": "AI가 재작성한 메시지"
+                },
+                {
+                  "recommendationType": "PORTFOLIO",
+                  "targetCategory": null,
+                  "reason": "AI ETF 이유",
+                  "message": "AI ETF 메시지"
+                }
+              ]
+            }""";
 
-        Cache mockCache = mock(Cache.class);
+        when(callSpec.content()).thenReturn(aiResponse);
 
-        when(callSpec.content())
-                .thenReturn(aiResponse);
-
-        when(cacheManager.getCache("portfolioAnalysis"))
-                .thenReturn(mockCache);
-
-        List<PortfolioRecommendation> result =
+        assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
                         account,
                         diagnosis,
                         allocation,
                         ruleBasedRecommendations
-                );
-
-        ArgumentCaptor<AiAnalysis> captor =
-                ArgumentCaptor.forClass(AiAnalysis.class);
-
-        verify(aiAnalysisRepository).save(captor.capture());
-
-        String savedJson =
-                captor.getValue().getAiFeedbackMessage();
-
-        assertThat(savedJson).contains("PORTFOLIO");
-        assertThat(savedJson).contains("DOMESTIC_ETF");
-        assertThat(savedJson).contains("AI가 재작성한 이유");
-        assertThat(savedJson).contains("AI ETF 이유");
-        assertThat(savedJson).doesNotContain("FOREIGN_ETF");
-
-        // 원본 타입/카테고리 유지 확인
-        assertThat(result.get(0).recommendationType())
-                .isEqualTo(RecommendationType.PORTFOLIO);
-
-        assertThat(result.get(1).targetCategory())
-                .isEqualTo("DOMESTIC_ETF");
+                ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 추천 항목 불일치");
     }
 
     @Test
@@ -428,5 +401,137 @@ class AiAnalysisServiceTest {
         assertThat(
                 captor.getValue().getRecommendedLearningTopic()
         ).isEqualTo("DOMESTIC_ETF");
+    }
+
+    @Test
+    @DisplayName("AI 추천 유형만 다르면 예외를 발생시킨다.")
+    void callAndSave_typeMismatch_throwsException() {
+        mockChatClientChain();
+
+        String aiResponse = """
+            {
+              "recommendations": [
+                {
+                  "recommendationType": "QUIZ",
+                  "targetCategory": null,
+                  "reason": "잘못된 추천 유형",
+                  "message": "메시지1"
+                },
+                {
+                  "recommendationType": "QUIZ",
+                  "targetCategory": "DOMESTIC_ETF",
+                  "reason": "정상 추천",
+                  "message": "메시지2"
+                }
+              ]
+            }""";
+
+        when(callSpec.content()).thenReturn(aiResponse);
+
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(
+                        account, diagnosis, allocation, ruleBasedRecommendations
+                ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 추천 항목 불일치");
+    }
+
+    @Test
+    @DisplayName("AI 추천 대상 카테고리만 다르면 예외를 발생시킨다.")
+    void callAndSave_categoryMismatch_throwsException() {
+        mockChatClientChain();
+
+        String aiResponse = """
+            {
+              "recommendations": [
+                {
+                  "recommendationType": "PORTFOLIO",
+                  "targetCategory": null,
+                  "reason": "정상 추천",
+                  "message": "메시지1"
+                },
+                {
+                  "recommendationType": "QUIZ",
+                  "targetCategory": "FOREIGN_ETF",
+                  "reason": "잘못된 추천 대상",
+                  "message": "메시지2"
+                }
+              ]
+            }""";
+
+        when(callSpec.content()).thenReturn(aiResponse);
+
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(
+                        account, diagnosis, allocation, ruleBasedRecommendations
+                ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 추천 항목 불일치");
+    }
+
+    @Test
+    @DisplayName("AI 추천 이유가 비어 있으면 예외를 발생시킨다.")
+    void callAndSave_blankReason_throwsException() {
+        mockChatClientChain();
+
+        String aiResponse = """
+            {
+              "recommendations": [
+                {
+                  "recommendationType": "PORTFOLIO",
+                  "targetCategory": null,
+                  "reason": "   ",
+                  "message": "분산 투자를 권장합니다."
+                },
+                {
+                  "recommendationType": "QUIZ",
+                  "targetCategory": "DOMESTIC_ETF",
+                  "reason": "ETF 비중이 낮습니다.",
+                  "message": "ETF 학습을 권장합니다."
+                }
+              ]
+            }""";
+
+        when(callSpec.content()).thenReturn(aiResponse);
+
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(
+                        account, diagnosis, allocation, ruleBasedRecommendations
+                ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 추천 문구 누락");
+    }
+
+    @Test
+    @DisplayName("AI 추천 메시지가 null이면 예외를 발생시킨다.")
+    void callAndSave_nullMessage_throwsException() {
+        mockChatClientChain();
+
+        String aiResponse = """
+            {
+              "recommendations": [
+                {
+                  "recommendationType": "PORTFOLIO",
+                  "targetCategory": null,
+                  "reason": "집중도가 높습니다.",
+                  "message": null
+                },
+                {
+                  "recommendationType": "QUIZ",
+                  "targetCategory": "DOMESTIC_ETF",
+                  "reason": "ETF 비중이 낮습니다.",
+                  "message": "ETF 학습을 권장합니다."
+                }
+              ]
+            }""";
+
+        when(callSpec.content()).thenReturn(aiResponse);
+
+        assertThatThrownBy(() ->
+                aiAnalysisService.callAndSave(
+                        account, diagnosis, allocation, ruleBasedRecommendations
+                ))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("AI 응답 추천 문구 누락");
     }
 }

@@ -91,6 +91,24 @@ public class AiAnalysisService {
                     + ", actual=" + aiParsed.size());
         }
 
+        for (int i = 0; i < ruleBasedRecommendations.size(); i++) {
+            PortfolioRecommendation original = ruleBasedRecommendations.get(i);
+            PortfolioRecommendation ai = aiParsed.get(i);
+
+            // 추천 유형과 대상 일치 여부 확인
+            if (ai == null
+                    || original.recommendationType() != ai.recommendationType()
+                    || !java.util.Objects.equals(original.targetCategory(), ai.targetCategory())) {
+                throw new IllegalStateException("AI 응답 추천 항목 불일치: index=" + i);
+            }
+
+            // AI가 작성한 문구의 유효성 확인
+            if (ai.reason() == null || ai.reason().isBlank()
+                    || ai.message() == null || ai.message().isBlank()) {
+                throw new IllegalStateException("AI 응답 추천 문구 누락: index=" + i);
+            }
+        }
+
         List<PortfolioRecommendation> merged = mergeRecommendations(ruleBasedRecommendations, aiParsed);
         String aiFeedbackJson = objectMapper.writeValueAsString(merged);
 

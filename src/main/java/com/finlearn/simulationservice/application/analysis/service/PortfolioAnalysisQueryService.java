@@ -72,10 +72,25 @@ public class PortfolioAnalysisQueryService {
             recommendations = aiAnalysisService.callAndSave(
                     data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations());
         } catch (Exception e) {
-            log.warn("[PortfolioAnalysis] AI 분석 실패 - 규칙 기반 결과로 대체: {}", e.getMessage());
-            aiAnalysisService.saveFailed(
-                    data.account(), data.diagnosis(), data.allocation(), data.diagnosis().recommendations(), e.getMessage());
+            log.warn("[PortfolioAnalysis] AI 분석 실패 - 규칙 기반 결과로 대체", e);
+
             recommendations = data.diagnosis().recommendations();
+
+            try {
+                aiAnalysisService.saveFailed(
+                        data.account(),
+                        data.diagnosis(),
+                        data.allocation(),
+                        data.diagnosis().recommendations(),
+                        e.getMessage()
+                );
+            } catch (Exception saveException) {
+                log.error(
+                        "[PortfolioAnalysis] AI 분석 실패 이력 저장 실패: investorId={}",
+                        investorId,
+                        saveException
+                );
+            }
         }
 
         return PortfolioAnalysisResponse.of(data.account(), data.holdings(), data.allocation(), data.diagnosis(),

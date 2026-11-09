@@ -1,11 +1,8 @@
-
 package com.finlearn.simulationservice.application.analysis.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAllocationResponse;
-import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
-import com.finlearn.simulationservice.domain.analysis.entity.AnalysisStatus;
-import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
+import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
 import com.finlearn.simulationservice.domain.analysis.vo.ConcentrationLevel;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
@@ -21,8 +18,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.cache.Cache;
-import org.springframework.cache.CacheManager;
 import org.springframework.test.util.ReflectionTestUtils;
 
 import java.math.BigDecimal;
@@ -32,7 +27,9 @@ import java.util.UUID;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,15 +37,11 @@ import static org.mockito.Mockito.when;
 class AiAnalysisServiceTest {
 
     @Mock
-    private AiAnalysisRepository aiAnalysisRepository;
-
-    @Mock
-    private CacheManager cacheManager;
-
-    @Mock
     private ChatClient chatClient;
 
-    // ChatClient 체인 Mock
+    @Mock
+    private AiAnalysisPersistenceService persistenceService;
+
     private ChatClient.ChatClientRequestSpec requestSpec;
     private ChatClient.CallResponseSpec callSpec;
 
@@ -69,10 +62,9 @@ class AiAnalysisServiceTest {
         callSpec = mock(ChatClient.CallResponseSpec.class);
 
         aiAnalysisService = new AiAnalysisService(
-                aiAnalysisRepository,
                 null,
                 new ObjectMapper(),
-                cacheManager
+                persistenceService
         );
 
         ReflectionTestUtils.setField(
@@ -141,7 +133,7 @@ class AiAnalysisServiceTest {
         );
     }
 
-    // AI를 실제로 호출하는 테스트에서만 Mock 체인을 설정
+    // 실제 외부 AI 호출 없이 ChatClient 호출 흐름을 Mock 처리
     private void mockChatClientChain() {
         when(chatClient.prompt()).thenReturn(requestSpec);
         when(requestSpec.system(anyString())).thenReturn(requestSpec);
@@ -150,8 +142,8 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("AI 응답 성공 시 COMPLETED 상태로 저장되고 캐시가 무효화된다.")
-    void callAndSave_success_savesCompletedAnalysisAndEvictsCache()
+    @DisplayName("AI 응답 성공 시 분석 이력 저장을 위임한다.")
+    void callAndSave_success_savesCompletedAnalysis()
             throws Exception {
 
         mockChatClientChain();
@@ -174,13 +166,7 @@ class AiAnalysisServiceTest {
                   ]
                 }""";
 
-        Cache mockCache = mock(Cache.class);
-
-        when(callSpec.content())
-                .thenReturn(aiResponse);
-
-        when(cacheManager.getCache("portfolioAnalysis"))
-                .thenReturn(mockCache);
+        when(callSpec.content()).thenReturn(aiResponse);
 
         List<PortfolioRecommendation> result =
                 aiAnalysisService.callAndSave(
@@ -190,54 +176,55 @@ class AiAnalysisServiceTest {
                         ruleBasedRecommendations
                 );
 
-        ArgumentCaptor<AiAnalysis> captor =
-                ArgumentCaptor.forClass(AiAnalysis.class);
+        ArgumentCaptor<CreateAiAnalysisCommand> captor =
+                ArgumentCaptor.forClass(CreateAiAnalysisCommand.class);
 
-        verify(aiAnalysisRepository).save(captor.capture());
-        verify(mockCache).evict(INVESTOR_ID);
+        verify(persistenceService).saveCompleted(captor.capture());
 
-        AiAnalysis saved = captor.getValue();
+        CreateAiAnalysisCommand command = captor.getValue();
 
-        assertThat(saved.getAnalysisStatus())
-                .isEqualTo(AnalysisStatus.COMPLETED);
-
-        assertThat(saved.getAiFeedbackMessage())
-                .contains("AI가 재작성한 이유");
-
-        assertThat(saved.getAccountId())
+        assertThat(command.accountId())
                 .isEqualTo(ACCOUNT_ID);
 
-        assertThat(saved.getFailureReason())
-                .isNull();
+        assertThat(command.aiFeedbackMessage())
+                .contains("AI가 재작성한 이유")
+                .contains("AI ETF 메시지");
 
         assertThat(result).hasSize(2);
 
         assertThat(result.get(0).reason())
                 .isEqualTo("AI가 재작성한 이유");
+
+        assertThat(result.get(0).recommendationType())
+                .isEqualTo(RecommendationType.PORTFOLIO);
+
+        assertThat(result.get(1).targetCategory())
+                .isEqualTo("DOMESTIC_ETF");
     }
 
     @Test
     @DisplayName("AI 응답의 추천 유형과 대상이 규칙 기반 결과와 다르면 예외를 발생시킨다.")
     void callAndSave_mismatchedRecommendation_throwsException() {
+
         mockChatClientChain();
 
         String aiResponse = """
-            {
-              "recommendations": [
                 {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": "FOREIGN_ETF",
-                  "reason": "AI가 재작성한 이유",
-                  "message": "AI가 재작성한 메시지"
-                },
-                {
-                  "recommendationType": "PORTFOLIO",
-                  "targetCategory": null,
-                  "reason": "AI ETF 이유",
-                  "message": "AI ETF 메시지"
-                }
-              ]
-            }""";
+                  "recommendations": [
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "FOREIGN_ETF",
+                      "reason": "AI가 재작성한 이유",
+                      "message": "AI가 재작성한 메시지"
+                    },
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "AI ETF 이유",
+                      "message": "AI ETF 메시지"
+                    }
+                  ]
+                }""";
 
         when(callSpec.content()).thenReturn(aiResponse);
 
@@ -250,10 +237,13 @@ class AiAnalysisServiceTest {
                 ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AI 응답 추천 항목 불일치");
+
+        verify(persistenceService, never())
+                .saveCompleted(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    @DisplayName("AI 호출 실패 시 예외를 던져 호출부가 폴백 처리할 수 있게 한다.")
+    @DisplayName("AI 호출 실패 시 예외를 던져 호출부가 Fallback 처리할 수 있게 한다.")
     void callAndSave_openAiError_throwsException() {
 
         mockChatClientChain();
@@ -270,10 +260,13 @@ class AiAnalysisServiceTest {
                 ))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("API timeout");
+
+        verify(persistenceService, never())
+                .saveCompleted(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    @DisplayName("AI 응답 항목 수가 룰 기반과 다르면 IllegalStateException을 던진다.")
+    @DisplayName("AI 응답 항목 수가 규칙 기반 추천과 다르면 예외를 발생시킨다.")
     void callAndSave_countMismatch_throwsIllegalStateException() {
 
         mockChatClientChain();
@@ -290,8 +283,7 @@ class AiAnalysisServiceTest {
                   ]
                 }""";
 
-        when(callSpec.content())
-                .thenReturn(mismatchedResponse);
+        when(callSpec.content()).thenReturn(mismatchedResponse);
 
         assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
@@ -305,7 +297,7 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("AI 응답 JSON 파싱 실패 시 예외를 던진다.")
+    @DisplayName("AI 응답 JSON 파싱 실패 시 예외를 발생시킨다.")
     void callAndSave_invalidJson_throwsException() {
 
         mockChatClientChain();
@@ -324,10 +316,9 @@ class AiAnalysisServiceTest {
     }
 
     @Test
-    @DisplayName("saveFailed 호출 시 FAILED 상태로 저장된다.")
-    void saveFailed_savesFailedAnalysis() {
+    @DisplayName("AI 분석 실패 시 실패 이력 저장에 필요한 데이터를 저장 서비스에 전달한다.")
+    void saveFailed_delegatesToPersistenceService() {
 
-        // AI 호출이 없는 테스트이므로 mockChatClientChain() 호출하지 않음
         aiAnalysisService.saveFailed(
                 account,
                 diagnosis,
@@ -336,25 +327,25 @@ class AiAnalysisServiceTest {
                 "API timeout"
         );
 
-        ArgumentCaptor<AiAnalysis> captor =
-                ArgumentCaptor.forClass(AiAnalysis.class);
+        ArgumentCaptor<CreateAiAnalysisCommand> captor =
+                ArgumentCaptor.forClass(CreateAiAnalysisCommand.class);
 
-        verify(aiAnalysisRepository).save(captor.capture());
+        verify(persistenceService).saveFailed(
+                captor.capture(),
+                eq("API timeout")
+        );
 
-        AiAnalysis saved = captor.getValue();
+        CreateAiAnalysisCommand command = captor.getValue();
 
-        assertThat(saved.getAnalysisStatus())
-                .isEqualTo(AnalysisStatus.FAILED);
+        assertThat(command.accountId())
+                .isEqualTo(ACCOUNT_ID);
 
-        assertThat(saved.getAiFeedbackMessage())
+        assertThat(command.aiFeedbackMessage())
                 .isEqualTo("N/A");
-
-        assertThat(saved.getFailureReason())
-                .isEqualTo("API timeout");
     }
 
     @Test
-    @DisplayName("성공 시 QUIZ 타입 recommendations의 첫 번째 targetCategory가 추천 학습 주제로 저장된다.")
+    @DisplayName("정상 AI 분석 시 QUIZ 추천 대상이 추천 학습 주제로 전달된다.")
     void callAndSave_success_setsRecommendedLearningTopicFromQuiz()
             throws Exception {
 
@@ -378,13 +369,8 @@ class AiAnalysisServiceTest {
                   ]
                 }""";
 
-        Cache mockCache = mock(Cache.class);
 
-        when(callSpec.content())
-                .thenReturn(aiResponse);
-
-        when(cacheManager.getCache("portfolioAnalysis"))
-                .thenReturn(mockCache);
+        when(callSpec.content()).thenReturn(aiResponse);
 
         aiAnalysisService.callAndSave(
                 account,
@@ -393,44 +379,47 @@ class AiAnalysisServiceTest {
                 ruleBasedRecommendations
         );
 
-        ArgumentCaptor<AiAnalysis> captor =
-                ArgumentCaptor.forClass(AiAnalysis.class);
+        ArgumentCaptor<CreateAiAnalysisCommand> captor =
+                ArgumentCaptor.forClass(CreateAiAnalysisCommand.class);
 
-        verify(aiAnalysisRepository).save(captor.capture());
+        verify(persistenceService).saveCompleted(captor.capture());
 
-        assertThat(
-                captor.getValue().getRecommendedLearningTopic()
-        ).isEqualTo("DOMESTIC_ETF");
+        assertThat(captor.getValue().recommendedLearningTopic())
+                .isEqualTo("DOMESTIC_ETF");
     }
 
     @Test
     @DisplayName("AI 추천 유형만 다르면 예외를 발생시킨다.")
     void callAndSave_typeMismatch_throwsException() {
+
         mockChatClientChain();
 
         String aiResponse = """
-            {
-              "recommendations": [
                 {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": null,
-                  "reason": "잘못된 추천 유형",
-                  "message": "메시지1"
-                },
-                {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": "DOMESTIC_ETF",
-                  "reason": "정상 추천",
-                  "message": "메시지2"
-                }
-              ]
-            }""";
+                  "recommendations": [
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": null,
+                      "reason": "잘못된 추천 유형",
+                      "message": "메시지1"
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "DOMESTIC_ETF",
+                      "reason": "정상 추천",
+                      "message": "메시지2"
+                    }
+                  ]
+                }""";
 
         when(callSpec.content()).thenReturn(aiResponse);
 
         assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
-                        account, diagnosis, allocation, ruleBasedRecommendations
+                        account,
+                        diagnosis,
+                        allocation,
+                        ruleBasedRecommendations
                 ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AI 응답 추천 항목 불일치");
@@ -439,31 +428,35 @@ class AiAnalysisServiceTest {
     @Test
     @DisplayName("AI 추천 대상 카테고리만 다르면 예외를 발생시킨다.")
     void callAndSave_categoryMismatch_throwsException() {
+
         mockChatClientChain();
 
         String aiResponse = """
-            {
-              "recommendations": [
                 {
-                  "recommendationType": "PORTFOLIO",
-                  "targetCategory": null,
-                  "reason": "정상 추천",
-                  "message": "메시지1"
-                },
-                {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": "FOREIGN_ETF",
-                  "reason": "잘못된 추천 대상",
-                  "message": "메시지2"
-                }
-              ]
-            }""";
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "정상 추천",
+                      "message": "메시지1"
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "FOREIGN_ETF",
+                      "reason": "잘못된 추천 대상",
+                      "message": "메시지2"
+                    }
+                  ]
+                }""";
 
         when(callSpec.content()).thenReturn(aiResponse);
 
         assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
-                        account, diagnosis, allocation, ruleBasedRecommendations
+                        account,
+                        diagnosis,
+                        allocation,
+                        ruleBasedRecommendations
                 ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AI 응답 추천 항목 불일치");
@@ -472,31 +465,35 @@ class AiAnalysisServiceTest {
     @Test
     @DisplayName("AI 추천 이유가 비어 있으면 예외를 발생시킨다.")
     void callAndSave_blankReason_throwsException() {
+
         mockChatClientChain();
 
         String aiResponse = """
-            {
-              "recommendations": [
                 {
-                  "recommendationType": "PORTFOLIO",
-                  "targetCategory": null,
-                  "reason": "   ",
-                  "message": "분산 투자를 권장합니다."
-                },
-                {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": "DOMESTIC_ETF",
-                  "reason": "ETF 비중이 낮습니다.",
-                  "message": "ETF 학습을 권장합니다."
-                }
-              ]
-            }""";
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "   ",
+                      "message": "분산 투자를 권장합니다."
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "DOMESTIC_ETF",
+                      "reason": "ETF 비중이 낮습니다.",
+                      "message": "ETF 학습을 권장합니다."
+                    }
+                  ]
+                }""";
 
         when(callSpec.content()).thenReturn(aiResponse);
 
         assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
-                        account, diagnosis, allocation, ruleBasedRecommendations
+                        account,
+                        diagnosis,
+                        allocation,
+                        ruleBasedRecommendations
                 ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AI 응답 추천 문구 누락");
@@ -505,31 +502,35 @@ class AiAnalysisServiceTest {
     @Test
     @DisplayName("AI 추천 메시지가 null이면 예외를 발생시킨다.")
     void callAndSave_nullMessage_throwsException() {
+
         mockChatClientChain();
 
         String aiResponse = """
-            {
-              "recommendations": [
                 {
-                  "recommendationType": "PORTFOLIO",
-                  "targetCategory": null,
-                  "reason": "집중도가 높습니다.",
-                  "message": null
-                },
-                {
-                  "recommendationType": "QUIZ",
-                  "targetCategory": "DOMESTIC_ETF",
-                  "reason": "ETF 비중이 낮습니다.",
-                  "message": "ETF 학습을 권장합니다."
-                }
-              ]
-            }""";
+                  "recommendations": [
+                    {
+                      "recommendationType": "PORTFOLIO",
+                      "targetCategory": null,
+                      "reason": "집중도가 높습니다.",
+                      "message": null
+                    },
+                    {
+                      "recommendationType": "QUIZ",
+                      "targetCategory": "DOMESTIC_ETF",
+                      "reason": "ETF 비중이 낮습니다.",
+                      "message": "ETF 학습을 권장합니다."
+                    }
+                  ]
+                }""";
 
         when(callSpec.content()).thenReturn(aiResponse);
 
         assertThatThrownBy(() ->
                 aiAnalysisService.callAndSave(
-                        account, diagnosis, allocation, ruleBasedRecommendations
+                        account,
+                        diagnosis,
+                        allocation,
+                        ruleBasedRecommendations
                 ))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("AI 응답 추천 문구 누락");

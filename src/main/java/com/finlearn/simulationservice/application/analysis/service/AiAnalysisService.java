@@ -6,9 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.finlearn.simulationservice.application.analysis.dto.response.PortfolioAllocationResponse;
 import com.finlearn.simulationservice.domain.analysis.command.CreateAiAnalysisCommand;
-import com.finlearn.simulationservice.domain.analysis.entity.AiAnalysis;
 import com.finlearn.simulationservice.domain.analysis.entity.AnalysisType;
-import com.finlearn.simulationservice.domain.analysis.repository.AiAnalysisRepository;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioDiagnosis;
 import com.finlearn.simulationservice.domain.analysis.vo.PortfolioRecommendation;
 import com.finlearn.simulationservice.domain.analysis.vo.RecommendationType;
@@ -20,11 +18,8 @@ import org.springframework.ai.chat.prompt.PromptTemplate;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.ResponseFormat;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.cache.CacheManager;
 import org.springframework.core.io.Resource;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.math.BigDecimal;
@@ -33,16 +28,14 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
 public class AiAnalysisService {
 
-    private final AiAnalysisRepository aiAnalysisRepository;
     private final ChatClient.Builder chatClientBuilder;
     private final ObjectMapper objectMapper;
-    private final CacheManager cacheManager;
+    private final AiAnalysisPersistenceService persistenceService;
 
     @Value("classpath:/prompts/ai-analysis-system.txt")
     private Resource systemPromptResource;
@@ -71,11 +64,10 @@ public class AiAnalysisService {
      * OpenAI 호출 → 분석 결과 저장 → 병합된 recommendations 반환.
      * 실패 시 예외를 그대로 던져 호출부에서 폴백 처리하도록 함.
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public List<PortfolioRecommendation> callAndSave(InvestmentAccount account,
-                                                      PortfolioDiagnosis diagnosis,
-                                                      PortfolioAllocationResponse allocation,
-                                                      List<PortfolioRecommendation> ruleBasedRecommendations) throws Exception {
+                                                     PortfolioDiagnosis diagnosis,
+                                                     PortfolioAllocationResponse allocation,
+                                                     List<PortfolioRecommendation> ruleBasedRecommendations) throws Exception {
         String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
 
         String rawResponse = chatClient.prompt()
@@ -112,12 +104,9 @@ public class AiAnalysisService {
         List<PortfolioRecommendation> merged = mergeRecommendations(ruleBasedRecommendations, aiParsed);
         String aiFeedbackJson = objectMapper.writeValueAsString(merged);
 
-        AiAnalysis analysis = AiAnalysis.create(
-                buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, userPrompt));
-        analysis.complete();
-        aiAnalysisRepository.save(analysis);
-
-        cacheManager.getCache("portfolioAnalysis").evict(account.getParticipant().getInvestorId());
+        persistenceService.saveCompleted(
+                buildCommand(account, diagnosis, allocation, aiFeedbackJson, rawResponse, userPrompt)
+        );
 
         return merged;
     }
@@ -125,17 +114,17 @@ public class AiAnalysisService {
     /**
      * AI 호출 실패 시 FAILED 이력만 저장 (폴백 경로에서 호출).
      */
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void saveFailed(InvestmentAccount account,
                            PortfolioDiagnosis diagnosis,
                            PortfolioAllocationResponse allocation,
                            List<PortfolioRecommendation> ruleBasedRecommendations,
                            String errorMessage) {
         String userPrompt = buildUserPrompt(diagnosis, ruleBasedRecommendations);
-        AiAnalysis analysis = AiAnalysis.create(
-                buildCommand(account, diagnosis, allocation, "N/A", null, userPrompt));
-        analysis.fail(errorMessage);
-        aiAnalysisRepository.save(analysis);
+
+        persistenceService.saveFailed(
+                buildCommand(account, diagnosis, allocation, "N/A", null, userPrompt),
+                errorMessage
+        );
     }
 
     private List<PortfolioRecommendation> mergeRecommendations(
@@ -165,11 +154,11 @@ public class AiAnalysisService {
     }
 
     private CreateAiAnalysisCommand buildCommand(InvestmentAccount account,
-                                                  PortfolioDiagnosis diagnosis,
-                                                  PortfolioAllocationResponse allocation,
-                                                  String aiFeedbackMessage,
-                                                  String modelResponse,
-                                                  String prompt) {
+                                                 PortfolioDiagnosis diagnosis,
+                                                 PortfolioAllocationResponse allocation,
+                                                 String aiFeedbackMessage,
+                                                 String modelResponse,
+                                                 String prompt) {
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime startOfDay = now.toLocalDate().atStartOfDay();
 

@@ -44,3 +44,6 @@ ssl/
 performance/*.log
 performance/*.jtl
 performance/report/
+
+# Local AI assistant settings
+.claude/

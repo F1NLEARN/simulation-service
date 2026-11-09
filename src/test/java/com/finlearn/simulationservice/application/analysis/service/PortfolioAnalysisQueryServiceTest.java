@@ -67,6 +67,8 @@ class PortfolioAnalysisQueryServiceTest {
     @Mock
     private AiAnalysisService aiAnalysisService;
 
+    private PortfolioAnalysisDataService portfolioAnalysisDataService;
+
     private PortfolioAnalysisQueryService portfolioAnalysisQueryService;
 
     private static final PortfolioDiagnosis STUB_DIAGNOSIS = new PortfolioDiagnosis(
@@ -79,14 +81,18 @@ class PortfolioAnalysisQueryServiceTest {
 
     @BeforeEach
     void setUp() {
-        portfolioAnalysisQueryService = new PortfolioAnalysisQueryService(
+        portfolioAnalysisDataService = new PortfolioAnalysisDataService(
                 investmentAccountRepository,
                 holdingRepository,
                 stockItemRepository,
-                portfolioAnalysisDomainService,
+                portfolioAnalysisDomainService
+        );
+
+        portfolioAnalysisQueryService = new PortfolioAnalysisQueryService(
                 aiAnalysisRepository,
                 aiAnalysisService,
-                new ObjectMapper()
+                new ObjectMapper(),
+                portfolioAnalysisDataService
         );
     }
 
